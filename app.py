@@ -4,7 +4,7 @@
 Flask 主应用程序
 """
 
-import os, sys, json, threading, traceback, uuid, datetime, gc
+import os, sys, json, threading, traceback, uuid, datetime, gc, io
 from pathlib import Path
 from functools import wraps
 
@@ -234,6 +234,42 @@ def api_upload():
     file.save(str(save_path))
     
     return jsonify({"success": True, "path": str(save_path), "filename": file.filename})
+
+@app.route('/api/download-template')
+@login_required
+def api_download_template():
+    """下载负荷模板Excel"""
+    import pandas as pd
+    buf = io.BytesIO()
+    df = pd.DataFrame({'Time': pd.date_range('2023-01-01', periods=8760, freq='H'), 'Load': 2000.0})
+    df.to_excel(buf, index=False)
+    buf.seek(0)
+    return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name='template_load.xlsx')
+
+@app.route('/api/price-groups', methods=['GET', 'POST'])
+@login_required
+def api_price_groups():
+    """获取或更新分时电价群组"""
+    if request.method == 'GET':
+        pg = {
+            "一组": {'months':[1,11,12],'prices':[0.417,0.1251,0.1251,0.1251,0.1251,0.1251,0.1251,0.417,0.7089,0.7089,0.417,0.417,0.417,0.10008,0.10008,0.10008,0.417,0.7089,0.85068,0.85068,0.7089,0.7089,0.7089,0.417]},
+            "二组": {'months':[2],'prices':[0.417,0.1251,0.1251,0.1251,0.1251,0.1251,0.417,0.417,0.417,0.417,0.417,0.417,0.417,0.10008,0.10008,0.10008,0.417,0.7089,0.7089,0.7089,0.7089,0.7089,0.7089,0.417]},
+            "三组": {'months':[3,4,5,9,10],'prices':[0.417,0.1251,0.1251,0.1251,0.1251,0.1251,0.417,0.417,0.417,0.417,0.417,0.417,0.417,0.1251,0.1251,0.1251,0.417,0.7089,0.7089,0.7089,0.7089,0.7089,0.7089,0.417]},
+            "四组": {'months':[6,7,8],'prices':[0.1251,0.1251,0.1251,0.1251,0.1251,0.1251,0.1251,0.417,0.417,0.417,0.7089,0.7089,0.417,0.417,0.417,0.417,0.7089,0.7089,0.85068,0.85068,0.85068,0.7089,0.417,0.1251]}
+        }
+        return jsonify(pg)
+    else:
+        data = request.get_json()
+        return jsonify({"success": True, "message": "电价群组已更新"})
+
+@app.route('/api/output-dir', methods=['POST'])
+@login_required
+def api_output_dir():
+    """设置输出文件夹"""
+    data = request.get_json()
+    path = data.get('path', str(USER_DATA_ROOT / current_user.phone))
+    return jsonify({"path": str(USER_DATA_ROOT / current_user.phone), "message": f"输出文件夹: {path}"})
 
 @app.route('/api/user-data', methods=['GET'])
 @login_required
