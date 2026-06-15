@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-源网荷储一体化计算平台 - Web版
+源网荷储一体化计算平台 - Web版 v1.1
 Flask 主应用程序
 """
 
-import os, sys, json, threading, traceback, uuid, datetime, gc
+import os, sys, json, threading, traceback, uuid, datetime, gc, io
 from pathlib import Path
 from functools import wraps
 
@@ -33,6 +33,16 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = '请先登录后再访问此页面。'
 
+# 确保数据库和默认管理员就绪（Railway部署时自动执行）
+with app.app_context():
+    db.create_all()
+    admin = User.query.filter_by(is_admin=True).first()
+    if not admin:
+        admin = User(username='admin', phone='13001080740', is_admin=True)
+        admin.set_password('0813@Ming')
+        db.session.add(admin)
+        db.session.commit()
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -50,6 +60,46 @@ def admin_required(f):
             return redirect(url_for('dashboard'))
         return f(*args, **kwargs)
     return decorated
+
+# ============================================================
+# 验证码管理（内存存储，5分钟过期）
+# ============================================================
+import random, time as _time_module
+_verify_codes = {}  # {phone: {code, expires_at}}
+
+def _generate_code():
+    return str(random.randint(100000, 999999))
+
+def _store_code(phone):
+    code = _generate_code()
+    _verify_codes[phone] = {"code": code, "expires": _time_module.time() + 300}
+    # 打印到控制台（后续替换为真实短信API）
+    print(f"\n{'='*40}\n  [验证码] {phone} -> {code}\n{'='*40}\n")
+    return code
+
+def _verify_code(phone, code):
+    entry = _verify_codes.get(phone)
+    if not entry:
+        return False
+    if _time_module.time() > entry["expires"]:
+        del _verify_codes[phone]
+        return False
+    if entry["code"] == code:
+        del _verify_codes[phone]
+        return True
+    return False
+
+# ============================================================
+# 发送验证码API
+# ============================================================
+@app.route('/api/send-code', methods=['POST'])
+def api_send_code():
+    data = request.get_json()
+    phone = data.get('phone', '').strip()
+    if not phone or len(phone) != 11 or not phone.isdigit():
+        return jsonify({"error": "手机号格式错误"}), 400
+    code = _store_code(phone)
+    return jsonify({"success": True, "code": code})  # 返回验证码方便测试（生产环境去掉code字段）
 
 # ============================================================
 # 首页 - 带动画的旋转元素页面
@@ -70,14 +120,18 @@ def register():
     
     if request.method == 'POST':
         phone = request.form.get('phone', '').strip()
+        verify_code = request.form.get('verify_code', '').strip()
         password = request.form.get('password', '').strip()
         confirm_password = request.form.get('confirm_password', '').strip()
         agree = request.form.get('agree')
         
-        # 验证
         errors = []
         if not phone or len(phone) != 11 or not phone.isdigit():
             errors.append('请输入正确的11位手机号')
+        if not verify_code:
+            errors.append('请输入短信验证码')
+        elif not _verify_code(phone, verify_code):
+            errors.append('验证码错误或已过期，请重新获取')
         if not password or len(password) < 6:
             errors.append('密码至少6位')
         if password != confirm_password:
@@ -154,6 +208,88 @@ def logout():
     return redirect(url_for('index'))
 
 # ============================================================
+# 文件上传（保存到用户本地目录）
+# ============================================================
+import datetime as _dt
+from werkzeug.utils import secure_filename
+
+USER_DATA_ROOT = Path(r"C:\Users\dukm6\Desktop\power\users")
+
+@app.route('/api/upload', methods=['POST'])
+@login_required
+def api_upload():
+    if 'file' not in request.files:
+        return jsonify({"error": "未选择文件"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "未选择文件"}), 400
+    
+    ftype = request.form.get('type', 'load')
+    phone = current_user.phone
+    user_dir = USER_DATA_ROOT / phone
+    user_dir.mkdir(parents=True, exist_ok=True)
+    
+    ext = Path(file.filename).suffix or '.xlsx'
+    save_path = user_dir / f"{ftype}_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
+    file.save(str(save_path))
+    
+    return jsonify({"success": True, "path": str(save_path), "filename": file.filename})
+
+@app.route('/api/download-template')
+@login_required
+def api_download_template():
+    """下载负荷模板Excel"""
+    import pandas as pd
+    buf = io.BytesIO()
+    df = pd.DataFrame({'Time': pd.date_range('2023-01-01', periods=8760, freq='H'), 'Load': 2000.0})
+    df.to_excel(buf, index=False)
+    buf.seek(0)
+    return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name='template_load.xlsx')
+
+@app.route('/api/price-groups', methods=['GET', 'POST'])
+@login_required
+def api_price_groups():
+    """获取或更新分时电价群组"""
+    if request.method == 'GET':
+        pg = {
+            "一组": {'months':[1,11,12],'prices':[0.417,0.1251,0.1251,0.1251,0.1251,0.1251,0.1251,0.417,0.7089,0.7089,0.417,0.417,0.417,0.10008,0.10008,0.10008,0.417,0.7089,0.85068,0.85068,0.7089,0.7089,0.7089,0.417]},
+            "二组": {'months':[2],'prices':[0.417,0.1251,0.1251,0.1251,0.1251,0.1251,0.417,0.417,0.417,0.417,0.417,0.417,0.417,0.10008,0.10008,0.10008,0.417,0.7089,0.7089,0.7089,0.7089,0.7089,0.7089,0.417]},
+            "三组": {'months':[3,4,5,9,10],'prices':[0.417,0.1251,0.1251,0.1251,0.1251,0.1251,0.417,0.417,0.417,0.417,0.417,0.417,0.417,0.1251,0.1251,0.1251,0.417,0.7089,0.7089,0.7089,0.7089,0.7089,0.7089,0.417]},
+            "四组": {'months':[6,7,8],'prices':[0.1251,0.1251,0.1251,0.1251,0.1251,0.1251,0.1251,0.417,0.417,0.417,0.7089,0.7089,0.417,0.417,0.417,0.417,0.7089,0.7089,0.85068,0.85068,0.85068,0.7089,0.417,0.1251]}
+        }
+        return jsonify(pg)
+    else:
+        data = request.get_json()
+        return jsonify({"success": True, "message": "电价群组已更新"})
+
+@app.route('/api/output-dir', methods=['POST'])
+@login_required
+def api_output_dir():
+    """设置输出文件夹"""
+    data = request.get_json()
+    path = data.get('path', str(USER_DATA_ROOT / current_user.phone))
+    return jsonify({"path": str(USER_DATA_ROOT / current_user.phone), "message": f"输出文件夹: {path}"})
+
+@app.route('/api/user-data', methods=['GET'])
+@login_required
+def api_user_data():
+    user_dir = USER_DATA_ROOT / current_user.phone
+    if not user_dir.exists():
+        return jsonify({"files": [], "tasks": []})
+    files = sorted(
+        [{"name": f.name, "time": _dt.datetime.fromtimestamp(f.stat().st_mtime).strftime('%m-%d %H:%M'), "size": f'{f.stat().st_size/1024:.1f}KB'}
+         for f in user_dir.iterdir() if f.is_file()],
+        key=lambda x: x['time'], reverse=True
+    )[:20]
+    tasks = sorted(
+        [{"name": d.name, "time": _dt.datetime.fromtimestamp(d.stat().st_mtime).strftime('%m-%d %H:%M')}
+         for d in user_dir.iterdir() if d.is_dir()],
+        key=lambda x: x['time'], reverse=True
+    )[:20]
+    return jsonify({"files": files, "tasks": tasks})
+
+# ============================================================
 # 找回密码
 # ============================================================
 @app.route('/forgot-password', methods=['GET', 'POST'])
@@ -163,12 +299,17 @@ def forgot_password():
     
     if request.method == 'POST':
         phone = request.form.get('phone', '').strip()
+        verify_code = request.form.get('verify_code', '').strip()
         new_password = request.form.get('new_password', '').strip()
         confirm_password = request.form.get('confirm_password', '').strip()
         
         errors = []
         if not phone or len(phone) != 11 or not phone.isdigit():
             errors.append('请输入正确的11位手机号')
+        if not verify_code:
+            errors.append('请输入短信验证码')
+        elif not _verify_code(phone, verify_code):
+            errors.append('验证码错误或已过期，请重新获取')
         if not new_password or len(new_password) < 6:
             errors.append('新密码至少6位')
         if new_password != confirm_password:
@@ -294,23 +435,50 @@ def _run_compute_task(task_id, task_type, params):
         db.session.commit()
 
 def _run_s1_compute(task, params):
-    """执行荷-储协同计算"""
+    """荷-储协同计算"""
     try:
         import numpy as np
         import pandas as pd
         from pathlib import Path
         
-        # 使用内置计算逻辑
-        # 从参数中获取配置
+        # 从数据库获取当前用户
+        user = User.query.get(task.user_id)
+        user_dir = USER_DATA_ROOT / user.phone if user else None
+        
+        # 读取参数
         battery_cap = float(params.get('battery_capacity_mw', 3))
         unit_invest = float(params.get('unit_investment', 700))
         annual_om = float(params.get('annual_om_cost', 42000))
+        capacity_price = float(params.get('capacity_price', 30))
+        charge_eff = float(params.get('charge_efficiency', 0.95))
+        discharge_eff = float(params.get('discharge_efficiency', 0.95))
+        max_c_rate = float(params.get('max_c_rate', 0.5))
         
-        # 生成模拟数据
-        hours = 8760
-        t = np.arange(hours)
-        load = 2000 * (0.3 * np.sin(2*np.pi*t/24) + 0.7) * (0.1 * np.sin(2*np.pi*t/168) + 0.9) * (0.2 * np.sin(2*np.pi*t/8760) + 0.8)
-        load = np.abs(load + np.random.normal(0, 200, hours))
+        # 尝试加载用户上传的负荷文件
+        load_data = None
+        if user_dir and user_dir.exists():
+            load_files = sorted(user_dir.glob('load_*.xlsx'), key=lambda x: x.stat().st_mtime, reverse=True)
+            if load_files:
+                try:
+                    df = pd.read_excel(load_files[0])
+                    if 'Load' in df.columns:
+                        load_data = df['Load'].values[:8760]
+                    elif len(df.columns) >= 2:
+                        load_data = df.iloc[:, 1].values[:8760]
+                    task.error_message = f'使用文件: {load_files[0].name}'
+                except Exception as e:
+                    task.error_message = f'文件读取失败: {e}'
+        
+        # 未找到文件则生成模拟数据
+        if load_data is None:
+            hours = 8760
+            t = np.arange(hours)
+            load = 2000 * (0.3 * np.sin(2*np.pi*t/24) + 0.7) * (0.1 * np.sin(2*np.pi*t/168) + 0.9) * (0.2 * np.sin(2*np.pi*t/8760) + 0.8)
+            load = np.abs(load + np.random.normal(0, 200, hours))
+            task.error_message = '未找到负荷文件，使用模拟数据'
+        else:
+            load = np.abs(load_data)
+            hours = len(load)
         
         # 分时电价
         prices = np.ones(hours) * 0.6
@@ -368,9 +536,10 @@ def _run_s1_compute(task, params):
         investment = unit_invest * cap_kw
         payback = investment / first_year_profit if first_year_profit > 0 else float('inf')
         
-        # 保存结果
-        result_dir = Path(app.config['UPLOAD_FOLDER']) / f'task_{task.id}'
-        result_dir.mkdir(exist_ok=True)
+        # 保存结果到用户专属目录
+        import datetime as _dt
+        result_dir = Path(r'C:\Users\dukm6\Desktop\power\users') / user.phone / f's1_{task.id}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        result_dir.mkdir(parents=True, exist_ok=True)
         
         df = pd.DataFrame({
             'Hour': range(hours),
@@ -491,9 +660,10 @@ def _run_s2_compute(task, params):
         first_year_profit = elec_profit + cap_saving + purchase_saving * 0.3 - annual_om
         payback = investment / first_year_profit if first_year_profit > 0 else float('inf')
         
-        # 保存结果
-        result_dir = Path(app.config['UPLOAD_FOLDER']) / f'task_{task.id}'
-        result_dir.mkdir(exist_ok=True)
+        # 保存结果到用户专属目录
+        import datetime as _dt
+        result_dir = Path(r'C:\Users\dukm6\Desktop\power\users') / user.phone / f's2_{task.id}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        result_dir.mkdir(parents=True, exist_ok=True)
         
         df = pd.DataFrame({
             'Hour': range(hours),

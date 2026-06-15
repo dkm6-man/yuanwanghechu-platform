@@ -464,6 +464,18 @@ body {
 .form-footer a { color: var(--primary); text-decoration: none; font-weight: 600; }
 .form-footer a:hover { text-decoration: underline; }
 
+/* 验证码按钮 */
+.input-with-btn { display: flex; gap: 8px; }
+.input-with-btn input { flex: 1; }
+.btn-send-code {
+    padding: 0 16px; border: 1px solid var(--accent); border-radius: 8px;
+    background: #fff; color: var(--accent); font-size: 0.82rem;
+    cursor: pointer; white-space: nowrap; font-weight: 600;
+    transition: all 0.2s;
+}
+.btn-send-code:hover { background: #fff3e0; }
+.btn-send-code:disabled { border-color: #ccc; color: #ccc; cursor: not-allowed; }
+
 /* ============================================================
    控制台 / 计算页面 / 管理后台
    ============================================================ */

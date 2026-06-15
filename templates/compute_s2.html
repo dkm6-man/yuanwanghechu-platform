@@ -1,201 +1,212 @@
 {% extends "base.html" %}
-{% block title %}电-荷-储协同计算 - 源网荷储一体化计算平台{% endblock %}
+{% block title %}电-荷-储协同优化 - 源网荷储一体化计算平台{% endblock %}
 {% block content %}
-<h2>🌞 电-荷-储协同优化计算</h2>
-<p style="color:var(--text-light);margin-bottom:20px;">结合光伏、风电出力预测，进行多能互补优化调度与电力市场交易策略</p>
 
-<div class="compute-container">
-    <div class="compute-sidebar">
-        <h3>📐 计算参数</h3>
-        
-        <div class="param-group">
-            <label>电池容量 (MW)</label>
-            <input type="number" id="battery_capacity_mw" value="3" step="0.1" min="0.1">
-        </div>
-        
-        <div class="param-group">
-            <label>光伏装机 (MW)</label>
-            <input type="number" id="pv_capacity_mw" value="45" step="1" min="0">
-        </div>
-        
-        <div class="param-group">
-            <label>风电装机 (MW)</label>
-            <input type="number" id="wind_capacity_mw" value="10" step="1" min="0">
-        </div>
-        
-        <div class="param-group">
-            <label>基准购电均价 (元/kWh)</label>
-            <input type="number" id="grid_avg_price" value="0.6" step="0.01" min="0">
-        </div>
-        
-        <div class="param-group">
-            <label>单位投资 (元/kW)</label>
-            <input type="number" id="unit_investment" value="700" step="10">
-        </div>
-        
-        <div class="param-group">
-            <label>年运维费用 (元)</label>
-            <input type="number" id="annual_om_cost" value="42000" step="1000">
-        </div>
-        
-        <div class="param-group">
-            <label>容量电价 (元/kW·月)</label>
-            <input type="number" id="capacity_price" value="30" step="1">
-        </div>
-        
-        <div class="param-group">
-            <label>充电效率</label>
-            <input type="number" id="charge_efficiency" value="0.95" step="0.01" min="0.5" max="1">
-        </div>
-        
-        <div class="param-group">
-            <label>放电效率</label>
-            <input type="number" id="discharge_efficiency" value="0.95" step="0.01" min="0.5" max="1">
-        </div>
-        
-        <div class="param-group">
-            <label>最大倍率 (C)</label>
-            <input type="number" id="max_c_rate" value="0.5" step="0.1" min="0.1">
-        </div>
-        
-        <div class="param-group">
-            <label>仿真时长 (小时)</label>
-            <select id="sim_hours">
-                <option value="8760">全年 (8760h)</option>
-                <option value="4380">半年 (4380h)</option>
-                <option value="2160">一季度 (2160h)</option>
-                <option value="720">一月 (720h)</option>
-            </select>
-        </div>
-
-        <button class="btn-compute" id="btnStart" onclick="startCompute()">
-            🚀 开始计算
-        </button>
-
-        <div class="progress-bar" style="display:none;" id="progressBar">
-            <div class="progress-fill" id="progressFill"></div>
-        </div>
-        <p id="progressText" style="text-align:center;font-size:0.85rem;color:var(--text-light);margin-top:8px;"></p>
-        <p id="resultLink" style="text-align:center;margin-top:8px;"></p>
+<!-- ===== 数据文件 ===== -->
+<div class="orig-section">
+    <div class="orig-section-title">数据文件</div>
+    <div class="orig-btn-row">
+        <button class="orig-btn orig-btn-file2" onclick="alert('上传历史负荷')">上传历史负荷</button>
+        <button class="orig-btn orig-btn-file2" onclick="alert('上传历史天气')">上传历史天气</button>
+        <button class="orig-btn orig-btn-file2" onclick="alert('上传市场化电价')">上传市场化电价</button>
+        <button class="orig-btn orig-btn-file2" onclick="alert('API获取天气开发中')">API获取天气</button>
+        <button class="orig-btn orig-btn-file2" onclick="alert('输出文件夹')">输出文件夹</button>
+        <button class="orig-btn orig-btn-file2" onclick="alert('数据状态')">显示数据状态</button>
     </div>
+    <div class="orig-status-text" id="s2DataStatus">状态: 使用模拟数据</div>
+</div>
 
-    <div class="compute-main">
-        <h3>📊 计算结果</h3>
-        <div id="resultArea">
-            <p style="color:var(--text-light);text-align:center;padding:60px 0;">
-                配置左侧参数后，点击"开始计算"按钮<br>
-                计算结果将在此处展示<br><br>
-                <span style="font-size:0.85rem;color:#999;">
-                    提示：电-荷-储协同计算需考虑光伏/风电出力时序特性
-                </span>
-            </p>
+<!-- ===== 技术及经济性参数 ===== -->
+<div class="orig-section">
+    <div class="orig-section-title">技术及经济性参数</div>
+    <div class="orig-param-grid col3">
+        <div class="orig-field"><label>电池容量(MW)</label><input type="number" id="s2_battery_capacity_mw" value="3" step="0.1"></div>
+        <div class="orig-field"><label>单位投资(元/kW)</label><input type="number" id="s2_unit_investment" value="700" step="10"></div>
+        <div class="orig-field"><label>年运维费(元)</label><input type="number" id="s2_annual_om_cost" value="42000" step="1000"></div>
+        <div class="orig-field"><label>容量电价(元/kW·月)</label><input type="number" id="s2_capacity_price" value="30" step="1"></div>
+        <div class="orig-field"><label>充电效率</label><input type="number" id="s2_charge_efficiency" value="0.95" step="0.01"></div>
+        <div class="orig-field"><label>放电效率</label><input type="number" id="s2_discharge_efficiency" value="0.95" step="0.01"></div>
+        <div class="orig-field"><label>放电深度DOD</label><input type="number" id="s2_dod" value="0.9" step="0.05"></div>
+        <div class="orig-field"><label>循环次数</label><input type="number" id="s2_cycle_life" value="6000" step="100"></div>
+        <div class="orig-field"><label>最大倍率C</label><input type="number" id="s2_max_c_rate" value="0.5" step="0.1"></div>
+    </div>
+</div>
+
+<!-- ===== 绿电资源配置 ===== -->
+<div class="orig-section" style="background:#e8fdf5;">
+    <div class="orig-section-title" style="border-bottom-color:#b2dfdb;">绿电资源配置</div>
+    <div class="orig-param-grid col3">
+        <div class="orig-field"><label>光伏装机(MW)</label><input type="number" id="s2_pv_capacity_mw" value="45" step="1"></div>
+        <div class="orig-field"><label>风电装机(MW)</label><input type="number" id="s2_wind_capacity_mw" value="10" step="1"></div>
+        <div class="orig-field"><label>基准购电均价(元/度)</label><input type="number" id="s2_grid_avg_price" value="0.6" step="0.01"></div>
+        <div class="orig-field"><label>城市</label><input type="text" id="s2_city" value="Beijing"></div>
+        <div class="orig-field"><button class="orig-btn orig-btn-weather" id="btnFetchWeather">获取天气预报</button></div>
+        <div class="orig-field"><span class="orig-status-text" id="weatherStatus" style="grid-column:span 2;">未获取预报</span></div>
+    </div>
+</div>
+
+<!-- ===== 天气预报曲线 ===== -->
+<div class="orig-section" id="weatherSection" style="display:none;">
+    <div class="orig-section-title">
+        未来5天天气预报曲线
+        <button class="orig-btn orig-btn-file2" onclick="toggleWeather()" style="font-size:0.72rem;margin-left:10px;">▼ 折叠</button>
+    </div>
+    <div class="orig-chart-canvas" id="weatherChart" style="min-height:200px;"></div>
+</div>
+
+<!-- ===== 协同预测参数 ===== -->
+<div class="orig-section">
+    <div class="orig-section-title">电-荷-储协同预测参数</div>
+    <div class="orig-param-grid col4">
+        <div class="orig-field"><label>训练集时长(小时)</label><input type="number" id="s2_train_hours" value="336"></div>
+        <div class="orig-field"><label>微调间隔(小时)</label><input type="number" id="s2_ft_interval" value="2"></div>
+        <div class="orig-field"><label>仿真时长(小时)</label><input type="number" id="s2_sim_hours" value="8760"></div>
+        <div class="orig-field"><label>开始时间(小时)</label><input type="number" id="s2_start_hour" value="0"></div>
+    </div>
+</div>
+
+<!-- ===== 控制按钮 ===== -->
+<div class="orig-section">
+    <div class="orig-ctrl-row">
+        <div class="orig-ctrl-btns">
+            <button class="orig-btn orig-btn-go" id="s2BtnCalc" onclick="s2StartCompute()">计 算</button>
+            <button class="orig-btn orig-btn-pause" id="s2BtnPause" disabled>暂停</button>
+            <button class="orig-btn orig-btn-resume" id="s2BtnResume" disabled>继续</button>
+            <button class="orig-btn orig-btn-stop" id="s2BtnStop" disabled>结束</button>
+        </div>
+        <div class="orig-progress-wrap">
+            <div class="orig-progress"><div class="orig-progress-fill" id="s2ProgFill"></div></div>
+            <span class="orig-progress-text" id="s2ProgText">就绪</span>
         </div>
     </div>
 </div>
 
-<script>
-let taskId = null;
-let pollInterval = null;
+<!-- ===== 结果输出 ===== -->
+<div class="orig-section">
+    <div class="orig-section-title">结果输出</div>
+    
+    <!-- 经济指标 -->
+    <div class="orig-kpi-row col5">
+        <div class="orig-kpi"><span class="orig-kpi-label">储能套利(元)</span><span class="orig-kpi-val" id="s2kpi_elec">--</span></div>
+        <div class="orig-kpi"><span class="orig-kpi-label">需量节省(元)</span><span class="orig-kpi-val" id="s2kpi_cap">--</span></div>
+        <div class="orig-kpi"><span class="orig-kpi-label">购电节省(元)</span><span class="orig-kpi-val" id="s2kpi_purchase">--</span></div>
+        <div class="orig-kpi"><span class="orig-kpi-label">总收益(元)</span><span class="orig-kpi-val" id="s2kpi_total">--</span></div>
+        <div class="orig-kpi"><span class="orig-kpi-label">回收期(年)</span><span class="orig-kpi-val" id="s2kpi_payback">--</span></div>
+    </div>
+    
+    <!-- 结果下载 -->
+    <div class="orig-download" id="s2downloadArea" style="display:none;margin-bottom:12px;">
+        <a id="s2downloadLink" href="#" class="orig-btn orig-btn-go">📥 下载计算结果</a>
+    </div>
+    
+    <!-- 图表区 -->
+    <div class="orig-charts-row" id="s2chartsRow" style="display:none;">
+        <div class="orig-chart-box">
+            <div class="orig-chart-header"><span>负荷预测对比</span></div>
+            <div class="orig-chart-canvas" id="s2chartLoad"></div>
+        </div>
+        <div class="orig-chart-box">
+            <div class="orig-chart-header"><span>电价预测对比</span></div>
+            <div class="orig-chart-canvas" id="s2chartPrice"></div>
+        </div>
+        <div class="orig-chart-box" style="grid-column:1/-1;">
+            <div class="orig-chart-header"><span>电源供给结构</span></div>
+            <div class="orig-chart-canvas" id="s2chartSupply"></div>
+        </div>
+    </div>
+</div>
 
-function startCompute() {
-    const btn = document.getElementById('btnStart');
-    btn.disabled = true;
-    btn.textContent = '⏳ 启动中...';
-    
-    document.getElementById('progressBar').style.display = 'block';
-    document.getElementById('progressFill').style.width = '0%';
-    document.getElementById('progressText').textContent = '正在初始化电-荷-储协同计算...';
-    document.getElementById('resultLink').innerHTML = '';
-    
-    const params = {
-        battery_capacity_mw: parseFloat(document.getElementById('battery_capacity_mw').value) || 3,
-        pv_capacity_mw: parseFloat(document.getElementById('pv_capacity_mw').value) || 45,
-        wind_capacity_mw: parseFloat(document.getElementById('wind_capacity_mw').value) || 10,
-        grid_avg_price: parseFloat(document.getElementById('grid_avg_price').value) || 0.6,
-        unit_investment: parseFloat(document.getElementById('unit_investment').value) || 700,
-        annual_om_cost: parseFloat(document.getElementById('annual_om_cost').value) || 42000,
-        capacity_price: parseFloat(document.getElementById('capacity_price').value) || 30,
-        charge_efficiency: parseFloat(document.getElementById('charge_efficiency').value) || 0.95,
-        discharge_efficiency: parseFloat(document.getElementById('discharge_efficiency').value) || 0.95,
-        max_c_rate: parseFloat(document.getElementById('max_c_rate').value) || 0.5,
-        sim_hours: parseInt(document.getElementById('sim_hours').value) || 8760,
-    };
-    
+<style>
+.orig-btn-file2 { background: #bbdefb; color: #1565c0; font-weight: 600; }
+.orig-btn-weather { background: #ffb74d; color: #e65100; font-weight: 600; }
+.orig-section[style*="e8fdf5"] .orig-field input { background: #fff; }
+.orig-status-text { font-size: 0.78rem; color: #f44336; padding: 4px 0; }
+.orig-kpi-row.col5 { grid-template-columns: repeat(5, 1fr); }
+.orig-chart-box:nth-child(3) { min-height: 200px; }
+@media (max-width: 1000px) { .orig-kpi-row.col5 { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px) { .orig-kpi-row.col5 { grid-template-columns: repeat(2, 1fr); } }
+</style>
+
+<script>
+let s2taskId = null;
+
+function toggleWeather() {
+    const ws = document.getElementById('weatherSection');
+    ws.style.display = ws.style.display === 'none' ? 'block' : 'none';
+}
+
+function s2CollectParams() {
+    const ids = ['battery_capacity_mw','unit_investment','annual_om_cost','capacity_price',
+        'charge_efficiency','discharge_efficiency','dod','cycle_life','max_c_rate',
+        'pv_capacity_mw','wind_capacity_mw','grid_avg_price','city',
+        'train_hours','ft_interval','sim_hours','start_hour'];
+    const p = {};
+    ids.forEach(id => {
+        const el = document.getElementById('s2_' + id);
+        if (!el) return;
+        const v = el.value;
+        p[id] = (id === 'city') ? v : (+v || 0);
+    });
+    return p;
+}
+
+function s2StartCompute() {
+    const btn = document.getElementById('s2BtnCalc');
+    btn.disabled = true; btn.textContent = '计算中...';
+    document.getElementById('s2BtnPause').disabled = false;
+    document.getElementById('s2BtnStop').disabled = false;
+    document.getElementById('s2ProgFill').style.width = '2%';
+    document.getElementById('s2ProgText').textContent = '启动中...';
+    document.getElementById('s2downloadArea').style.display = 'none';
+    ['s2kpi_elec','s2kpi_cap','s2kpi_purchase','s2kpi_total','s2kpi_payback'].forEach(id => document.getElementById(id).textContent = '--');
+
     fetch('/api/compute/start', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_type: 's2', params: params })
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({task_type: 's2', params: s2CollectParams()})
     })
     .then(r => r.json())
     .then(data => {
-        if (data.error) {
-            alert('启动失败: ' + data.error);
-            btn.disabled = false;
-            btn.textContent = '🚀 开始计算';
-            return;
-        }
-        taskId = data.task_id;
-        btn.textContent = '🔄 计算中...';
-        pollTask();
+        if (data.error) { alert('失败: ' + data.error); s2ResetUI(); return; }
+        s2taskId = data.task_id;
+        s2PollTask();
     })
-    .catch(err => {
-        alert('请求失败: ' + err.message);
-        btn.disabled = false;
-        btn.textContent = '🚀 开始计算';
-    });
+    .catch(e => { alert('请求失败: ' + e); s2ResetUI(); });
 }
 
-function pollTask() {
-    if (!taskId) return;
-    
-    fetch('/api/task/' + taskId + '/status')
-        .then(r => r.json())
-        .then(data => {
-            document.getElementById('progressFill').style.width = data.progress + '%';
-            document.getElementById('progressText').textContent = 
-                data.status === 'running' ? '计算中... ' + data.progress + '%' :
-                data.status === 'completed' ? '✅ 计算完成！' :
-                data.status === 'failed' ? '❌ 计算失败' : '等待中...';
-            
-            if (data.status === 'completed') {
-                document.getElementById('btnStart').disabled = false;
-                document.getElementById('btnStart').textContent = '🚀 重新计算';
-                document.getElementById('resultLink').innerHTML = 
-                    '<a href="/api/task/' + taskId + '/download" class="btn-action" style="display:inline-block;margin-top:10px;">📥 下载结果</a>';
-                showResult();
-            } else if (data.status === 'failed') {
-                document.getElementById('btnStart').disabled = false;
-                document.getElementById('btnStart').textContent = '🚀 重新计算';
-                document.getElementById('resultArea').innerHTML = 
-                    '<p style="color:red;">计算失败，请检查参数后重试</p>';
-            } else {
-                pollInterval = setTimeout(pollTask, 2000);
-            }
-        })
-        .catch(err => {
-            document.getElementById('progressText').textContent = '查询状态失败';
-            setTimeout(pollTask, 3000);
-        });
+function s2PollTask() {
+    if (!s2taskId) return;
+    fetch('/api/task/' + s2taskId + '/status')
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('s2ProgFill').style.width = (data.progress || 0) + '%';
+        document.getElementById('s2ProgText').textContent = 
+            data.status === 'running' ? '计算中...' + (data.progress||0) + '%' :
+            data.status === 'completed' ? '完成' : data.status === 'failed' ? '失败' : '等待中';
+        
+        if (data.status === 'completed') {
+            s2ResetUI();
+            document.getElementById('s2downloadArea').style.display = 'block';
+            document.getElementById('s2downloadLink').href = '/api/task/' + s2taskId + '/download';
+            document.getElementById('s2chartsRow').style.display = 'grid';
+            ['s2kpi_elec','s2kpi_cap','s2kpi_purchase','s2kpi_total','s2kpi_payback'].forEach(id => document.getElementById(id).textContent = '计算结果');
+            ['s2chartLoad','s2chartPrice','s2chartSupply'].forEach(id => {
+                document.getElementById(id).innerHTML = '<div style="text-align:center;padding:80px;color:#999;">📊 详细图表请下载结果查看</div>';
+            });
+        } else if (data.status === 'failed') {
+            s2ResetUI();
+            alert('计算失败，请检查参数后重试');
+        } else {
+            setTimeout(s2PollTask, 2000);
+        }
+    })
+    .catch(() => setTimeout(s2PollTask, 3000));
 }
 
-function showResult() {
-    const resultArea = document.getElementById('resultArea');
-    const pvCap = parseFloat(document.getElementById('pv_capacity_mw').value) || 45;
-    const windCap = parseFloat(document.getElementById('wind_capacity_mw').value) || 10;
-    const batteryCap = parseFloat(document.getElementById('battery_capacity_mw').value) || 3;
-    
-    resultArea.innerHTML = `
-        <table class="result-table">
-            <tr><th>指标</th><th>数值</th></tr>
-            <tr><td>光伏装机</td><td>${pvCap} MW</td></tr>
-            <tr><td>风电装机</td><td>${windCap} MW</td></tr>
-            <tr><td>储能容量</td><td>${batteryCap} MW / ${(batteryCap*1000).toFixed(0)} kW</td></tr>
-            <tr><td>绿电总装机</td><td>${(pvCap + windCap)} MW</td></tr>
-            <tr><td colspan="2" style="color:green;">✅ 详细结果请下载结果文件查看<br>
-                <small>包含：储能套利收益、需量节省、购电节省、绿电消纳量等</small>
-            </td></tr>
-        </table>
-    `;
+function s2ResetUI() {
+    document.getElementById('s2BtnCalc').disabled = false; document.getElementById('s2BtnCalc').textContent = '计 算';
+    document.getElementById('s2BtnPause').disabled = true; document.getElementById('s2BtnResume').disabled = true;
+    document.getElementById('s2BtnStop').disabled = true;
 }
 </script>
 {% endblock %}

@@ -14,17 +14,15 @@
             <a href="/" class="nav-brand">⚡ 源网荷储一体化计算平台</a>
             <div class="nav-links">
                 {% if current_user.is_authenticated %}
-                    <a href="{{ url_for('dashboard') }}">控制台</a>
-                    <a href="{{ url_for('compute_s1') }}">荷-储协同</a>
-                    <a href="{{ url_for('compute_s2') }}">电-荷-储协同</a>
-                    {% if current_user.is_admin %}
-                    <a href="{{ url_for('admin_panel') }}" class="admin-link">🔧 管理</a>
-                    {% endif %}
-                    <span class="nav-user">{{ current_user.username }}</span>
-                    <a href="{{ url_for('logout') }}" class="btn-logout">退出</a>
+                <a href="{{ url_for('dashboard') }}">控制台</a>
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('admin_panel') }}" class="admin-link">管理</a>
+                {% endif %}
+                <span class="nav-user">{{ current_user.phone }}</span>
+                <a href="{{ url_for('logout') }}" class="btn-logout">退出</a>
                 {% else %}
-                    <a href="{{ url_for('login') }}">登录</a>
-                    <a href="{{ url_for('register') }}" class="btn-register">注册</a>
+                <a href="{{ url_for('login') }}">登录</a>
+                <a href="{{ url_for('register') }}" class="btn-register">注册</a>
                 {% endif %}
             </div>
         </div>
@@ -51,7 +49,7 @@
 
     <!-- 页脚 -->
     <footer class="footer">
-        <p>&copy; 2024 源网荷储一体化计算平台 | <a href="{{ url_for('agreement') }}">用户协议</a></p>
+        <p>&copy; {{ now().year if now is defined else '2026' }} 源网荷储一体化计算平台 | <a href="{{ url_for('agreement') }}">用户协议</a></p>
     </footer>
 
     {% block extra_js %}{% endblock %}
