@@ -20,6 +20,18 @@ from flask_login import (
 from config import Config
 from models import db, User, ComputeTask
 
+# 导入原始计算引擎（避免tkinter GUI启动）
+import warnings as _w
+_w.filterwarnings('ignore')
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+_CURRENT_DIR = Path(__file__).resolve().parent
+_ENGINE_GLOBALS = {}
+with open(_CURRENT_DIR.parent / '0612-协同1.0调试.py', 'r', encoding='utf-8') as _f:
+    _engine_source = _f.read()
+_engine_source = _engine_source.replace("if __name__==\"__main__\":", "if False:")
+exec(_engine_source, _ENGINE_GLOBALS)
+
 # ============================================================
 # Flask App 初始化
 # ============================================================
@@ -435,134 +447,116 @@ def _run_compute_task(task_id, task_type, params):
         db.session.commit()
 
 def _run_s1_compute(task, params):
-    """荷-储协同计算"""
+    """荷-储协同计算 — 使用原始计算引擎"""
     try:
         import numpy as np
         import pandas as pd
-        from pathlib import Path
+        import datetime as _dt
         
-        # 从数据库获取当前用户
+        C = _ENGINE_GLOBALS['C']
+        U = _ENGINE_GLOBALS['U']
+        IdealStrat = _ENGINE_GLOBALS['IdealStrat']
+        HybridForecaster = _ENGINE_GLOBALS['HybridForecaster']
+        TransformerForecaster = _ENGINE_GLOBALS.get('TransformerForecaster')
+        RollingStratOnline = _ENGINE_GLOBALS['RollingStratOnline']
+        econ = _ENGINE_GLOBALS['econ']
+        
         user = User.query.get(task.user_id)
-        user_dir = USER_DATA_ROOT / user.phone if user else None
+        user_dir = USER_DATA_ROOT / user.phone if user else USER_DATA_ROOT / 'default'
+        user_dir.mkdir(parents=True, exist_ok=True)
         
         # 读取参数
-        battery_cap = float(params.get('battery_capacity_mw', 3))
-        unit_invest = float(params.get('unit_investment', 700))
-        annual_om = float(params.get('annual_om_cost', 42000))
-        capacity_price = float(params.get('capacity_price', 30))
-        charge_eff = float(params.get('charge_efficiency', 0.95))
-        discharge_eff = float(params.get('discharge_efficiency', 0.95))
-        max_c_rate = float(params.get('max_c_rate', 0.5))
+        strategy = params.get('strategy', 'MILP')
+        p = C.DP.copy()
+        for k in ['battery_capacity_mw','unit_investment','annual_om_cost','capacity_price',
+                  'charge_efficiency','discharge_efficiency','dod','cycle_life','max_c_rate','discount_rate']:
+            if k in params:
+                p[k] = float(params[k])
+        p['soc_min'] = max(p.get('soc_min', 0.1), 0.05)
+        p['soc_max'] = min(0.95, p.get('soc_min', 0.1) + p.get('dod', 0.85))
         
-        # 尝试加载用户上传的负荷文件
+        # 加载负荷数据
         load_data = None
-        if user_dir and user_dir.exists():
-            load_files = sorted(user_dir.glob('load_*.xlsx'), key=lambda x: x.stat().st_mtime, reverse=True)
-            if load_files:
-                try:
-                    df = pd.read_excel(load_files[0])
-                    if 'Load' in df.columns:
-                        load_data = df['Load'].values[:8760]
-                    elif len(df.columns) >= 2:
-                        load_data = df.iloc[:, 1].values[:8760]
-                    task.error_message = f'使用文件: {load_files[0].name}'
-                except Exception as e:
-                    task.error_message = f'文件读取失败: {e}'
+        load_files = sorted(user_dir.glob('load_*.xlsx'), key=lambda x: x.stat().st_mtime, reverse=True)
+        if load_files:
+            df = pd.read_excel(load_files[0])
+            if 'Load' in df.columns:
+                load_data = df['Load'].values
+            elif len(df.columns) >= 2:
+                load_data = df.iloc[:, 1].values
         
-        # 未找到文件则生成模拟数据
         if load_data is None:
-            hours = 8760
-            t = np.arange(hours)
-            load = 2000 * (0.3 * np.sin(2*np.pi*t/24) + 0.7) * (0.1 * np.sin(2*np.pi*t/168) + 0.9) * (0.2 * np.sin(2*np.pi*t/8760) + 0.8)
-            load = np.abs(load + np.random.normal(0, 200, hours))
-            task.error_message = '未找到负荷文件，使用模拟数据'
+            # 使用工具函数生成模拟负荷
+            load_df = U.gen_load()
+            load = load_df['Load'].values[:8760]
         else:
-            load = np.abs(load_data)
-            hours = len(load)
+            load = np.abs(load_data)[:8760]
+            load = np.resize(load, 8760) if len(load) < 8760 else load[:8760]
         
-        # 分时电价
-        prices = np.ones(hours) * 0.6
-        for h in range(hours):
-            hour = h % 24
-            if 9 <= hour <= 11 or 18 <= hour <= 20:
-                prices[h] = 0.85
-            elif 0 <= hour <= 7:
-                prices[h] = 0.13
+        # 构建分时电价
+        pg = C.PG.copy()
+        prices = U.build_price(pg)
+        prices = prices[:8760]
         
-        # 简单储能策略
-        cap_kw = battery_cap * 1000
-        soc = np.zeros(hours)
-        power = np.zeros(hours)
-        soc_current = cap_kw * 0.1
+        task.progress = 10
+        db.session.commit()
         
-        # 每天充放电策略
-        for day in range(hours // 24):
-            start = day * 24
-            end = min(start + 24, hours)
-            day_prices = prices[start:end]
-            day_load = load[start:end]
+        if strategy == 'MILP':
+            # MILP理想最优策略
+            strat = IdealStrat(p)
+            df = strat.run(load, prices, 
+                          lambda cur, tot, msg: setattr(task, 'progress', min(99, 10 + int(cur/tot*89))) or db.session.commit(), 
+                          threading.Event(), threading.Event())
+        elif strategy in ('Hybrid', 'Transformer'):
+            # AI预测策略
+            sh = int(params.get('sim_hours', 4380))
+            s0 = int(params.get('start_hour', 0))
+            hh = int(params.get('train_hours', 336))
+            fi = int(params.get('ft_interval', 1))
+            pred_len = int(params.get('pred_len', 1))
             
-            # 找最低价时段充电
-            low_hours = np.argsort(day_prices)[:4]
-            high_hours = np.argsort(day_prices)[-4:]
+            e0 = min(8759, s0 + sh - 1)
+            ls = load[s0:e0+1]
+            ps = prices[s0:e0+1]
             
-            for h in range(end - start):
-                idx = start + h
-                if h in low_hours:
-                    chg = min(cap_kw * 0.5, (cap_kw * 0.95 - soc_current) / 0.95)
-                    power[idx] = chg
-                    soc_current += chg * 0.95
-                elif h in high_hours:
-                    dis = min(cap_kw * 0.5, (soc_current - cap_kw * 0.1) * 0.95)
-                    power[idx] = -dis
-                    soc_current -= dis / 0.95
-                else:
-                    power[idx] = 0
-                
-                soc[idx] = soc_current / cap_kw
+            if strategy == 'Hybrid':
+                forecaster_class = HybridForecaster
+            else:
+                forecaster_class = TransformerForecaster
+            
+            strat = RollingStratOnline(p, forecaster_class, hh, fi, pred_len, 
+                                       name=f"{strategy}Online", abs_start_hour=s0)
+            df = strat.run(ls, ps,
+                          lambda cur, tot, msg: setattr(task, 'progress', min(99, 10 + int(cur/tot*89))) or db.session.commit(),
+                          threading.Event(), threading.Event())
+        else:
+            raise ValueError(f"未知策略: {strategy}")
         
-        # 计算经济效益
-        elec_profit = sum(-power[i] * prices[i] for i in range(hours))
-        cap_saving = 0
-        for m in range(12):
-            m_start = m * 730
-            m_end = min((m+1) * 730, hours)
-            orig_max = max(load[m_start:m_end])
-            new_max = max(load[m_start:m_end] + power[m_start:m_end])
-            if new_max < orig_max:
-                cap_saving += (orig_max - new_max) * 30
+        if df is None:
+            raise ValueError("计算被终止")
         
-        first_year_profit = elec_profit + cap_saving - annual_om
-        investment = unit_invest * cap_kw
-        payback = investment / first_year_profit if first_year_profit > 0 else float('inf')
+        task.progress = 95
+        db.session.commit()
         
-        # 保存结果到用户专属目录
-        import datetime as _dt
-        result_dir = Path(r'C:\Users\dukm6\Desktop\power\users') / user.phone / f's1_{task.id}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        # 经济评估
+        ec = econ(df, p)
+        
+        # 保存结果
+        result_dir = user_dir / f's1_{strategy}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
         result_dir.mkdir(parents=True, exist_ok=True)
+        df.to_csv(result_dir / '全年逐时结果.csv', index=False, encoding='utf-8-sig')
         
-        df = pd.DataFrame({
-            'Hour': range(hours),
-            'Load_Original': load,
-            'Load_New': load + power,
-            'Power': power,
-            'SOC': soc,
-            'Price': prices,
-            'Electricity_Profit': -power * prices,
-        })
-        
-        df.to_csv(result_dir / 'result.csv', index=False, encoding='utf-8-sig')
-        
-        with open(result_dir / 'summary.txt', 'w', encoding='utf-8') as f:
-            f.write(f"=== 荷-储协同计算结果 ===\n")
-            f.write(f"电池容量: {battery_cap} MW\n")
-            f.write(f"首年综合盈利: {first_year_profit:,.2f} 元\n")
-            f.write(f"电价套利: {elec_profit:,.2f} 元\n")
-            f.write(f"需量节省: {cap_saving:,.2f} 元\n")
-            f.write(f"投资回收期: {payback:.2f} 年\n")
+        with open(result_dir / '经济指标.txt', 'w', encoding='utf-8') as fw:
+            fw.write(f"策略: {strategy}\n")
+            fw.write(f"首年综合盈利: {ec['first_year_profit']:,.2f} 元\n")
+            fw.write(f"电价收益: {ec.get('electricity_profit', 0):,.2f} 元\n")
+            fw.write(f"容量节省: {ec.get('capacity_saving', 0):,.2f} 元\n")
+            fw.write(f"回收期: {ec['payback']:.2f} 年\n")
+            fw.write(f"生命周期净利润: {ec.get('lifecycle_profit', 0):,.2f} 元\n")
+            if 'life_years' in ec:
+                fw.write(f"电池循环寿命: {ec['life_years']:.2f} 年\n")
         
         return str(result_dir)
-        
     except Exception as e:
         traceback.print_exc()
         raise e
@@ -573,6 +567,9 @@ def _run_s2_compute(task, params):
         import numpy as np
         import pandas as pd
         from pathlib import Path
+        
+        # 获取用户信息
+        user = User.query.get(task.user_id)
         
         battery_cap = float(params.get('battery_capacity_mw', 3))
         pv_cap = float(params.get('pv_capacity_mw', 45))
