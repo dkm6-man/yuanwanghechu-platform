@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}控制台 - 源网荷储一体化计算平台{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:10px;">👋 欢迎，{{ current_user.username }}
+    {% if current_user.is_admin %}<span style="color:var(--accent);font-size:0.85rem;">（管理员）</span>{% endif %}
+</h2>
+<p style="color:var(--text-light);margin-bottom:30px;">选择下方计算模块开始使用</p>
+
+<div class="dashboard">
+    <!-- 荷-储协同 -->
+    <div class="dash-card">
+        <h3>🔋 荷-储协同优化</h3>
+        <p>基于分时电价机制，利用MILP混合整数线性规划算法，优化储能系统充放电策略，实现峰谷套利和需量管理收益最大化。</p>
+        <p style="font-size:0.85rem;color:#999;">策略：理想最优(MILP) | Hybrid CNN-LSTM | Transformer</p>
+        <a href="{{ url_for('compute_s1') }}" class="btn-action">进入计算 →</a>
+    </div>
+
+    <!-- 电-荷-储协同 -->
+    <div class="dash-card">
+        <h3>🌞 电-荷-储协同优化</h3>
+        <p>接入光伏、风电出力模型，进行多能互补优化调度。支持实时天气数据接口和市场化电价预测。</p>
+        <p style="font-size:0.85rem;color:#999;">功能：绿电消纳 | 购电优化 | 电力市场交易</p>
+        <a href="{{ url_for('compute_s2') }}" class="btn-action">进入计算 →</a>
+    </div>
+
+    <!-- 算-电-荷-储协同 -->
+    <div class="dash-card">
+        <h3>💻 算-电-荷-储协同</h3>
+        <p>结合数据中心算力需求，进行算力-电力联合优化调度。实现计算任务与能源消耗的最优匹配。</p>
+        <p style="font-size:0.85rem;color:#999;">状态：🚧 开发中，敬请期待</p>
+        <a href="{{ url_for('compute_s3') }}" class="btn-action" style="background:#999;">预览 →</a>
+    </div>
+
+    <!-- 历史任务 -->
+    <div class="dash-card">
+        <h3>📋 我的计算任务</h3>
+        <div id="taskList">
+            <p style="color:var(--text-light);">加载中...</p>
+        </div>
+    </div>
+</div>
+
+{% if current_user.is_admin %}
+<div style="margin-top:30px;padding:20px;background:#fff3e0;border-radius:var(--radius);border:1px solid #ffe0b2;">
+    <h3 style="color:var(--accent);">🔧 管理员快捷操作</h3>
+    <p style="margin:10px 0;">
+        <a href="{{ url_for('admin_panel') }}" class="btn-action" style="background:var(--accent);">进入管理后台</a>
+    </p>
+</div>
+{% endif %}
+
+<script>
+// 加载任务列表
+fetch('/api/tasks')
+    .then(r => r.json())
+    .then(tasks => {
+        const list = document.getElementById('taskList');
+        if (tasks.length === 0) {
+            list.innerHTML = '<p style="color:var(--text-light);">暂无计算任务</p>';
+            return;
+        }
+        let html = '<table class="result-table"><tr><th>类型</th><th>状态</th><th>进度</th><th>时间</th><th>操作</th></tr>';
+        tasks.forEach(t => {
+            const statusColor = t.status === 'completed' ? 'green' : 
+                               t.status === 'running' ? 'blue' : 
+                               t.status === 'failed' ? 'red' : 'gray';
+            html += `<tr>
+                <td>${t.task_type}</td>
+                <td style="color:${statusColor}">${t.status}</td>
+                <td>${t.progress}%</td>
+                <td style="font-size:0.8rem">${t.created_at || '-'}</td>
+                <td>${t.status === 'completed' ? 
+                    `<a href="/api/task/${t.id}/download">下载</a>` : '-'}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        list.innerHTML = html;
+    })
+    .catch(err => {
+        document.getElementById('taskList').innerHTML = '<p style="color:red;">加载失败</p>';
+    });
+</script>
+{% endblock %}
