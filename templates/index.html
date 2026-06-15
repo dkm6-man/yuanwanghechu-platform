@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>源网荷储一体化计算平台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="index-page">
+
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">⚡ 源网荷储一体化计算平台</a>
+            <div class="nav-links">
+                <a href="{{ url_for('login') }}">用户登录</a>
+                <a href="{{ url_for('register') }}" class="btn-register">立即注册</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash消息 -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-container">
+        {% for category, message in messages %}
+        <div class="flash-message flash-{{ category }}">{{ message }}<span class="flash-close" onclick="this.parentElement.remove()">&times;</span></div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- 主区域 -->
+    <main class="hero">
+        <!-- 星光背景 -->
+        <div class="stars-bg" id="starsBg"></div>
+
+        <!-- 标题 -->
+        <div class="hero-header">
+            <h1 class="hero-h1">算电协同 · 源网荷储一体化</h1>
+            <p class="hero-p">AI深度学习负荷预测 · MILP储能优化调度 · 全生命周期经济评估</p>
+        </div>
+
+        <!-- 旋转动画 -->
+        <div class="hero-visual">
+            <div class="rotation-stage">
+                <div class="orbit orbit-outer" id="orbitOuter">
+                    <div class="orbit-node node-power">
+                        <div class="node-content" id="ncPower">
+                            <span class="node-icon">⚡</span>
+                            <span class="node-label">电 力</span>
+                        </div>
+                    </div>
+                    <div class="orbit-node node-compute">
+                        <div class="node-content" id="ncCompute">
+                            <span class="node-icon">💻</span>
+                            <span class="node-label">算 力</span>
+                        </div>
+                    </div>
+                    <div class="orbit-node node-load">
+                        <div class="node-content" id="ncLoad">
+                            <span class="node-icon">🏭</span>
+                            <span class="node-label">负 荷</span>
+                        </div>
+                    </div>
+                    <div class="orbit-node node-storage">
+                        <div class="node-content" id="ncStorage">
+                            <span class="node-icon">🔋</span>
+                            <span class="node-label">储 能</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="orbit orbit-inner" id="orbitInner">
+                    <svg viewBox="0 0 360 360">
+                        <circle cx="180" cy="180" r="70" class="ring ring-1" />
+                        <circle cx="180" cy="180" r="105" class="ring ring-2" />
+                        <line x1="180" y1="180" x2="310" y2="180" class="spoke" />
+                        <line x1="180" y1="180" x2="180" y2="310" class="spoke" />
+                        <line x1="180" y1="180" x2="50" y2="180" class="spoke" />
+                        <line x1="180" y1="180" x2="180" y2="50" class="spoke" />
+                    </svg>
+                </div>
+
+                <div class="center-node">
+                    <div class="center-ring"></div>
+                    <span class="center-label">协 同</span>
+                    <span class="center-sublabel">SYNERGY</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA按钮 + 调速 -->
+        <div class="hero-actions">
+            <a href="{{ url_for('register') }}" class="btn-cta btn-cta-primary">立即注册</a>
+            <a href="{{ url_for('login') }}" class="btn-cta btn-cta-secondary">用户登录</a>
+            <div class="speed-ctl">
+                <span>🔄</span>
+                <input type="range" id="speedSlider" min="10" max="120" value="60" step="5">
+                <span id="speedLabel">60秒/圈</span>
+            </div>
+        </div>
+
+        <!-- 特性卡片 -->
+        <div class="features-row">
+            <div class="feat-card">
+                <span class="feat-num">01</span>
+                <span class="feat-icon">📊</span>
+                <h4>智能负荷预测</h4>
+                <p>CNN-LSTM + Transformer 双模型深度学习</p>
+            </div>
+            <div class="feat-card">
+                <span class="feat-num">02</span>
+                <span class="feat-icon">🔋</span>
+                <h4>储能策略优化</h4>
+                <p>MILP 优化充放电，峰谷套利最大化</p>
+            </div>
+            <div class="feat-card">
+                <span class="feat-num">03</span>
+                <span class="feat-icon">🌞</span>
+                <h4>绿色能源消纳</h4>
+                <p>光伏 + 风电建模，清洁能源优先调度</p>
+            </div>
+            <div class="feat-card">
+                <span class="feat-num">04</span>
+                <span class="feat-icon">💰</span>
+                <h4>全周期经济评估</h4>
+                <p>电池衰减模型，投资回收期精准测算</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="page-footer">
+        <span>&copy; 2024 源网荷储一体化计算平台</span>
+        <span class="footer-sep">|</span>
+        <a href="{{ url_for('agreement') }}">用户协议</a>
+    </footer>
+
+    <script>
+    // ===== 旋转调速 =====
+    const orbitOuter = document.getElementById('orbitOuter');
+    const orbitInner = document.getElementById('orbitInner');
+    const slider = document.getElementById('speedSlider');
+    const label = document.getElementById('speedLabel');
+
+    function setSpeed(sec) {
+        orbitOuter.style.animationDuration = sec + 's';
+        orbitInner.style.animationDuration = (sec * 0.7) + 's';
+        document.querySelectorAll('.node-content').forEach(el => {
+            el.style.animationDuration = sec + 's';
+        });
+        label.textContent = sec + '秒/圈';
+    }
+
+    slider.addEventListener('input', () => setSpeed(parseInt(slider.value)));
+    setSpeed(60);
+
+    // ===== 星空：普通星光 + 呼吸光点 =====
+    const bg = document.getElementById('starsBg');
+    // 小星光
+    for (let i = 0; i < 60; i++) {
+        const s = document.createElement('div');
+        s.className = 'star';
+        s.style.left = Math.random() * 100 + '%';
+        s.style.top = Math.random() * 100 + '%';
+        s.style.width = s.style.height = (Math.random() * 2.5 + 0.8) + 'px';
+        s.style.animationDelay = Math.random() * 7 + 's';
+        s.style.animationDuration = (Math.random() * 5 + 3) + 's';
+        bg.appendChild(s);
+    }
+    // 呼吸光点 - 分布在边缘和四角
+    const breathePositions = [
+        {x:5,y:8},{x:12,y:3},{x:85,y:5},{x:92,y:10},
+        {x:3,y:50},{x:8,y:70},{x:90,y:45},{x:95,y:65},
+        {x:15,y:90},{x:25,y:95},{x:75,y:88},{x:88,y:92},
+        {x:50,y:3},{x:55,y:96},{x:5,y:30},{x:94,y:35}
+    ];
+    breathePositions.forEach(pos => {
+        const b = document.createElement('div');
+        b.className = 'star-breathe';
+        b.style.left = pos.x + '%';
+        b.style.top = pos.y + '%';
+        b.style.width = (Math.random() * 4 + 3) + 'px';
+        b.style.height = b.style.width;
+        b.style.animationDelay = Math.random() * 6 + 's';
+        b.style.animationDuration = (Math.random() * 4 + 4) + 's';
+        bg.appendChild(b);
+    });
+    </script>
+</body>
+</html>
