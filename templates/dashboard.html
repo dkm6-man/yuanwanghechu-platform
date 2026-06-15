@@ -641,5 +641,31 @@ function closeModal() {
     const m = document.getElementById('modalOverlay');
     if (m) m.remove();
 }
+
+// ===== 页面加载时自动恢复正在运行的任务 =====
+(function autoRecover() {
+    fetch('/api/tasks').then(r=>r.json()).then(tasks => {
+        const active = tasks.find(t => t.status === 'running' || t.status === 'pending');
+        if (!active) return;
+        const type = active.task_type === '荷-储协同' ? 's1' : 's2';
+        const btns = type === 's1' ? ['s1calc','s1pause','s1stop'] : ['s2calc','s2pause','s2stop'];
+        const progId = type === 's1' ? 's1prog' : 's2prog';
+        const statusId = type === 's1' ? 's1status' : 's2status';
+        const kpiIds = type === 's1' ? {kpi1:'first_year_profit',kpi2:'payback',kpi3:'lifecycle_profit',kpi4:'life_years'}
+            : {kpi1:'electricity_profit',kpi2:'capacity_saving',kpi3:'purchase_saving',kpi4:'first_year_profit',kpi5:'payback'};
+        const chartIds = type === 's1' ? {chartA:'s1chartA',chartB:'s1chartB',charts:'s1charts',dl:'s1dl',dllink:'s1dllink'}
+            : {chartA:'s2chartA',chartB:'s2chartB',charts:'s2charts',dl:'s2dl',dllink:'s2dllink'};
+        // 切换到对应标签
+        switchTab(type);
+        // 禁用计算按钮，恢复进度
+        if (btns[0] === 's1calc') document.getElementById('s1calc').textContent = '计算中...';
+        else document.getElementById('s2calc').textContent = '计算中...';
+        document.getElementById(btns[0]).disabled = true;
+        if (chartIds.charts) document.getElementById(chartIds.charts).style.display = 'grid';
+        if (chartIds.dl) document.getElementById(chartIds.dl).style.display = 'none';
+        // 恢复轮询
+        pollTask(type, active.id, btns, progId, statusId, kpiIds, chartIds);
+    });
+})();
 </script>
 {% endblock %}

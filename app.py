@@ -397,7 +397,7 @@ def compute_s3():
 import queue as _queue
 
 _compute_queue = _queue.Queue()          # 待处理任务队列
-_MAX_WORKERS = 1                         # 同时计算任务数（保持1个避免内存/CPU过载，可调为2）
+_MAX_WORKERS = 2                         # 同时计算任务数（保持1个避免内存/CPU过载，可调为2）
 _active_tasks = {}                        # task_id -> thread
 _queue_order = []                         # 等待队列顺序
 _queue_lock = threading.Lock()
