@@ -569,6 +569,13 @@ def api_task_kill(task_id):
 def api_task_stop(task_id):
     return api_task_kill(task_id)
 
+def _make_progress_cb(task_id):
+    def cb(cur, tot, msg=""):
+        with app.app_context():
+            ComputeTask.query.filter_by(id=task_id).update({'progress': min(99, 10+int(cur/tot*89)) if tot>0 else 0}, synchronize_session=False)
+            db.session.commit()
+    return cb
+
 def _run_s1_compute(task, params, se=None, pe=None):
     """荷-储协同计算 — 使用原始计算引擎"""
     try:
@@ -629,9 +636,7 @@ def _run_s1_compute(task, params, se=None, pe=None):
         
         if strategy == 'MILP':
             strat = IdealStrat(p)
-            df = strat.run(load, prices, 
-                          lambda cur, tot, msg: setattr(task, 'progress', min(99, 10 + int(cur/tot*89))) or db.session.commit(), 
-                          se, pe)
+            df = strat.run(load, prices, _make_progress_cb(task.id), se, pe)
         elif strategy in ('Hybrid', 'Transformer'):
             # AI预测策略
             sh = int(params.get('sim_hours', 4380))
@@ -651,9 +656,7 @@ def _run_s1_compute(task, params, se=None, pe=None):
             
             strat = RollingStratOnline(p, forecaster_class, hh, fi, pred_len, 
                                        name=f"{strategy}Online", abs_start_hour=s0)
-            df = strat.run(ls, ps,
-                          lambda cur, tot, msg: setattr(task, 'progress', min(99, 10 + int(cur/tot*89))) or db.session.commit(),
-                          se, pe)
+            df = strat.run(ls, ps, _make_progress_cb(task.id), se, pe)
         else:
             raise ValueError(f"未知策略: {strategy}")
         
@@ -786,9 +789,7 @@ def _run_s2_compute(task, params, se=None, pe=None):
         task.progress = 10
         db.session.commit()
         
-        df = strat.run(ls, ps,
-                      lambda cur, tot, msg: setattr(task, 'progress', min(99, 10 + int(cur/tot*89))) or db.session.commit(),
-                      se, pe)
+        df = strat.run(ls, ps, _make_progress_cb(task.id), se, pe)
         
         if df is None:
             raise ValueError("计算被终止")
