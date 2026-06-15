@@ -62,6 +62,46 @@ def admin_required(f):
     return decorated
 
 # ============================================================
+# 验证码管理（内存存储，5分钟过期）
+# ============================================================
+import random, time as _time_module
+_verify_codes = {}  # {phone: {code, expires_at}}
+
+def _generate_code():
+    return str(random.randint(100000, 999999))
+
+def _store_code(phone):
+    code = _generate_code()
+    _verify_codes[phone] = {"code": code, "expires": _time_module.time() + 300}
+    # 打印到控制台（后续替换为真实短信API）
+    print(f"\n{'='*40}\n  [验证码] {phone} -> {code}\n{'='*40}\n")
+    return code
+
+def _verify_code(phone, code):
+    entry = _verify_codes.get(phone)
+    if not entry:
+        return False
+    if _time_module.time() > entry["expires"]:
+        del _verify_codes[phone]
+        return False
+    if entry["code"] == code:
+        del _verify_codes[phone]
+        return True
+    return False
+
+# ============================================================
+# 发送验证码API
+# ============================================================
+@app.route('/api/send-code', methods=['POST'])
+def api_send_code():
+    data = request.get_json()
+    phone = data.get('phone', '').strip()
+    if not phone or len(phone) != 11 or not phone.isdigit():
+        return jsonify({"error": "手机号格式错误"}), 400
+    code = _store_code(phone)
+    return jsonify({"success": True, "code": code})  # 返回验证码方便测试（生产环境去掉code字段）
+
+# ============================================================
 # 首页 - 带动画的旋转元素页面
 # ============================================================
 @app.route('/')
@@ -80,14 +120,18 @@ def register():
     
     if request.method == 'POST':
         phone = request.form.get('phone', '').strip()
+        verify_code = request.form.get('verify_code', '').strip()
         password = request.form.get('password', '').strip()
         confirm_password = request.form.get('confirm_password', '').strip()
         agree = request.form.get('agree')
         
-        # 验证
         errors = []
         if not phone or len(phone) != 11 or not phone.isdigit():
             errors.append('请输入正确的11位手机号')
+        if not verify_code:
+            errors.append('请输入短信验证码')
+        elif not _verify_code(phone, verify_code):
+            errors.append('验证码错误或已过期，请重新获取')
         if not password or len(password) < 6:
             errors.append('密码至少6位')
         if password != confirm_password:
@@ -173,12 +217,17 @@ def forgot_password():
     
     if request.method == 'POST':
         phone = request.form.get('phone', '').strip()
+        verify_code = request.form.get('verify_code', '').strip()
         new_password = request.form.get('new_password', '').strip()
         confirm_password = request.form.get('confirm_password', '').strip()
         
         errors = []
         if not phone or len(phone) != 11 or not phone.isdigit():
             errors.append('请输入正确的11位手机号')
+        if not verify_code:
+            errors.append('请输入短信验证码')
+        elif not _verify_code(phone, verify_code):
+            errors.append('验证码错误或已过期，请重新获取')
         if not new_password or len(new_password) < 6:
             errors.append('新密码至少6位')
         if new_password != confirm_password:
