@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}用户登录 - 源网荷储一体化计算平台{% endblock %}
+{% block content %}
+<div class="form-container">
+    <h2 class="form-title">用户登录</h2>
+    <p class="form-subtitle">使用手机号登录源网荷储一体化计算平台</p>
+    
+    <form method="POST" action="{{ url_for('login') }}">
+        <div class="form-group">
+            <label for="login_id">手机号</label>
+            <input type="tel" id="login_id" name="login_id" 
+                   placeholder="请输入注册手机号" required autofocus>
+        </div>
+        
+        <div class="form-group">
+            <label for="password">密码</label>
+            <input type="password" id="password" name="password" 
+                   placeholder="请输入密码" required>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-check">
+                <input type="checkbox" name="remember"> 记住我
+            </label>
+        </div>
+        
+        <button type="submit" class="btn-submit">登 录</button>
+    </form>
+    
+    <p class="form-footer">
+        还没有账号？<a href="{{ url_for('register') }}">立即注册</a>
+    </p>
+    <p class="form-footer" style="margin-top:4px;">
+        <a href="{{ url_for('forgot_password') }}" style="font-size:0.85rem;color:var(--text-light);">忘记密码？</a>
+    </p>
+</div>
+{% endblock %}
