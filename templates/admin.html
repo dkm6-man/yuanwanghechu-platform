@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}管理后台 - 源网荷储一体化计算平台{% endblock %}
+{% block content %}
+<h2>🔧 管理后台</h2>
+<p style="color:var(--text-light);margin-bottom:20px;">管理员 {{ current_user.username }}，欢迎使用管理后台</p>
+
+<div class="admin-container">
+    <!-- 用户管理 -->
+    <div class="admin-section" style="grid-column: 1 / -1;">
+        <h3>👥 用户管理</h3>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>用户名</th>
+                    <th>手机号</th>
+                    <th>角色</th>
+                    <th>状态</th>
+                    <th>注册时间</th>
+                    <th>最后登录</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="userTableBody">
+                <tr><td colspan="8">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 任务管理 -->
+    <div class="admin-section" style="grid-column: 1 / -1;">
+        <h3>📊 计算任务列表</h3>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>用户</th>
+                    <th>类型</th>
+                    <th>状态</th>
+                    <th>进度</th>
+                    <th>创建时间</th>
+                    <th>完成时间</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in tasks %}
+                <tr>
+                    <td>{{ task.id }}</td>
+                    <td>{{ task.user.username }}</td>
+                    <td>{{ '荷-储协同' if task.task_type == 's1' else '电-荷-储协同' }}</td>
+                    <td style="color:{% if task.status == 'completed' %}green{% elif task.status == 'running' %}blue{% elif task.status == 'failed' %}red{% else %}gray{% endif %}">
+                        {{ task.status }}
+                    </td>
+                    <td>{{ task.progress }}%</td>
+                    <td>{{ task.created_at.strftime('%m-%d %H:%M') if task.created_at else '-' }}</td>
+                    <td>{{ task.completed_at.strftime('%m-%d %H:%M') if task.completed_at else '-' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7">暂无计算任务</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+// 加载用户列表
+fetch('/api/admin/users')
+    .then(r => r.json())
+    .then(users => {
+        const tbody = document.getElementById('userTableBody');
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8">暂无用户</td></tr>';
+            return;
+        }
+        let html = '';
+        users.forEach(u => {
+            html += `<tr>
+                <td>${u.id}</td>
+                <td>${u.username}</td>
+                <td>${u.phone || '-'}</td>
+                <td>${u.is_admin ? '<span style="color:#f57c00;">管理员</span>' : '普通用户'}</td>
+                <td style="color:${u.is_active ? 'green' : 'red'}">
+                    ${u.is_active ? '正常' : '已禁用'}
+                </td>
+                <td>${u.created_at || '-'}</td>
+                <td>${u.last_login || '-'}</td>
+                <td>
+                    <button class="btn-sm btn-toggle ${u.is_active ? '' : 'active'}" 
+                            onclick="toggleUser(${u.id})"
+                            ${u.id == {{ current_user.id }} ? 'disabled' : ''}>
+                        ${u.is_active ? '禁用' : '启用'}
+                    </button>
+                </td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+    });
+
+function toggleUser(userId) {
+    if (!confirm('确定要切换该用户的状态吗？')) return;
+    
+    fetch('/api/admin/user/' + userId + '/toggle', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+            } else {
+                location.reload();
+            }
+        });
+}
+</script>
+{% endblock %}
