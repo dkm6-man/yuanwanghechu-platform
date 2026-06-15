@@ -495,11 +495,17 @@ def _run_compute_task(task_id, task_type, params):
             _active_tasks[task_id] = {'se': se, 'pe': pe}
         
         try:
+            # 获取控制事件
+            with _queue_lock:
+                info = _active_tasks.get(task_id, {})
+            se = info.get('se', threading.Event())
+            pe = info.get('pe', threading.Event())
+            
             # 根据任务类型执行不同计算
             if task_type == 's1':
-                result = _run_s1_compute(task, params)
+                result = _run_s1_compute(task, params, se, pe)
             else:
-                result = _run_s2_compute(task, params)
+                result = _run_s2_compute(task, params, se, pe)
             
             if result:
                 task.status = 'completed'
@@ -563,10 +569,12 @@ def api_task_kill(task_id):
 def api_task_stop(task_id):
     return api_task_kill(task_id)
 
-def _run_s1_compute(task, params):
+def _run_s1_compute(task, params, se=None, pe=None):
     """荷-储协同计算 — 使用原始计算引擎"""
     try:
         _reload_engine()  # 每次计算前重新加载最新代码
+        if se is None: se = threading.Event()
+        if pe is None: pe = threading.Event()
         import numpy as np
         import pandas as pd
         import datetime as _dt
@@ -705,7 +713,7 @@ def _run_s1_compute(task, params):
         traceback.print_exc()
         raise e
 
-def _run_s2_compute(task, params):
+def _run_s2_compute(task, params, se=None, pe=None):
     """电-荷-储协同计算 — 使用原始Step2Strat引擎"""
     try:
         _reload_engine()  # 每次计算前重新加载最新代码
