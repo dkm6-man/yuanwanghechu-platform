@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block title %}控制台 - 源网荷储一体化计算平台{% endblock %}
-
 {% block extra_css %}
 <style>
-.tab-bar { background: #90a4ae; display: flex; height: 50px; margin: -30px -20px 0; }
+/* 去掉页面边距，铺满 */
+.main-content { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+
+.tab-bar { background: #90a4ae; display: flex; height: 46px; margin: 0; }
 .tab-btn { 
     flex:1; border: none; cursor: pointer; font-size: 0.95rem; font-weight: 700;
     color: #1b1b1b; transition: all 0.15s; font-family: inherit;
@@ -120,11 +122,11 @@
 <div class="gui-section s1">
     <div class="gui-section-title">数据文件</div>
     <div class="gui-btn-row">
-        <button class="gui-btn btn-data" onclick="dlTemplate()">下载模板</button>
+        <button class="gui-btn btn-data" onclick="window.open('/api/download-template')">下载模板</button>
         <button class="gui-btn btn-data" onclick="document.getElementById('s1FileLoad').click()">上传负荷文件</button>
         <input type="file" id="s1FileLoad" accept=".xlsx,.xls" style="display:none" onchange="uploadFile(this,'load','s1FileStatus')">
-        <button class="gui-btn btn-data" onclick="alert('分时电价表格')">分时电价表格</button>
-        <button class="gui-btn btn-data" onclick="alert('选择输出文件夹')">输出文件夹</button>
+        <button class="gui-btn btn-data" onclick="showPriceModal()">分时电价表格</button>
+        <button class="gui-btn btn-data" onclick="showOutputDir()">输出文件夹</button>
     </div>
     <div class="gui-status-text red" id="s1FileStatus">未上传负荷文件</div>
 </div>
@@ -223,14 +225,15 @@
 <div class="gui-section s2">
     <div class="gui-section-title">数据文件</div>
     <div class="gui-btn-row">
+        <button class="gui-btn btn-data2" onclick="window.open('/api/download-template')">下载模板</button>
         <button class="gui-btn btn-data2" onclick="document.getElementById('s2FileLoad').click()">上传历史负荷</button>
         <input type="file" id="s2FileLoad" accept=".xlsx,.xls" style="display:none" onchange="uploadFile(this,'load','s2DataStatus')">
         <button class="gui-btn btn-data2" onclick="document.getElementById('s2FileWeather').click()">上传历史天气</button>
         <input type="file" id="s2FileWeather" accept=".xlsx,.xls" style="display:none" onchange="uploadFile(this,'weather','s2DataStatus')">
         <button class="gui-btn btn-data2" onclick="document.getElementById('s2FilePrice').click()">上传市场化电价</button>
         <input type="file" id="s2FilePrice" accept=".xlsx,.xls" style="display:none" onchange="uploadFile(this,'price','s2DataStatus')">
-        <button class="gui-btn btn-data2" onclick="alert('API获取天气')">API获取天气</button>
-        <button class="gui-btn btn-data2" onclick="alert('选择输出文件夹')">输出文件夹</button>
+        <button class="gui-btn btn-data2" onclick="alert('API获取天气：输入城市后点击获取')">API获取天气</button>
+        <button class="gui-btn btn-data2" onclick="showOutputDir()">输出文件夹</button>
         <button class="gui-btn btn-data2" onclick="showDataStatus('s2DataStatus')">显示数据状态</button>
     </div>
     <div class="gui-status-text red" id="s2DataStatus">状态:未加载</div>
@@ -318,21 +321,35 @@
 </div>
 
 <!-- ==================== S3: 算-电-荷-储 ==================== -->
-<div class="tab-content" id="tab-s3" style="background:#fff3e0;min-height:400px;display:flex;align-items:center;justify-content:center;">
-    <div style="text-align:center;color:#9e9e9e;font-size:1.4rem;font-weight:700;">
+<div class="tab-content" id="tab-s3" style="background:#fff3e0;min-height:400px;">
+    <div id="tab-s3-inner" style="width:100%;text-align:center;color:#9e9e9e;font-size:1.4rem;font-weight:700;display:flex;align-items:center;justify-content:center;height:400px;">
         🚧 第三步功能开发中 🚧<br><span style="font-size:0.9rem;">敬请期待</span>
     </div>
 </div>
 
 <script>
-// ===== Tab 切换 =====
+// ===== Navbar 与Tab颜色同步 =====
+const navbarEl = document.querySelector('.navbar');
+const navColors = {s1:'#e8f5e9',s2:'#e3f2fd',s3:'#fff3e0'};
+
 function switchTab(tab) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.style.display='none');
     document.querySelector('.tab-' + tab).classList.add('active');
-    document.getElementById('tab-' + tab).style.display = s3Check(tab);
+    document.getElementById('tab-' + tab).style.display = tab==='s3' ? 'flex' : 'block';
+    // S3特殊处理居中
+    if (tab==='s3') {
+        const inner = document.getElementById('tab-s3-inner');
+        if (inner) inner.style.display = 'flex';
+    }
+    // 导航栏同步颜色
+    if (navbarEl) {
+        navbarEl.style.background = navColors[tab];
+        navbarEl.style.borderBottomColor = tab==='s1'?'#a5d6a7':tab==='s2'?'#90caf9':'#ffcc80';
+        navbarEl.querySelector('.nav-brand').style.color = '#1b1b1b';
+        navbarEl.querySelectorAll('.nav-links a').forEach(a => a.style.color = '#333');
+    }
 }
-function s3Check(t) { return t==='s3' ? 'flex' : 'block'; }
 
 // ===== S1 参数控制 =====
 function s1ToggleParams() {
@@ -488,5 +505,107 @@ function resetUI(type, btns, statusId) {
 
 function s1UpdateChart() {}
 s1ToggleParams();
+
+// ===== 分时电价管理弹窗 =====
+function showPriceModal() {
+    fetch('/api/price-groups')
+    .then(r=>r.json())
+    .then(groups => {
+        window._priceGroups = groups;
+        renderPriceModal(groups, Object.keys(groups)[0]);
+    });
+}
+
+function renderPriceModal(groups, activeGroup) {
+    if (!groups[activeGroup]) return;
+    const g = groups[activeGroup];
+    const groupList = Object.keys(groups).map(n => n + '（' + groups[n].months.join(',') + '月）').join(', ');
+    
+    let html = '<div style="background:#e8f5e9;border-radius:8px;padding:15px;width:700px;max-height:90vh;overflow-y:auto;">';
+    html += '<h3 style="color:#1b5e20;margin-bottom:8px;">分时电价管理</h3>';
+    
+    // 群组选择 + 按钮
+    html += '<div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">';
+    html += '<select id="priceGroupSelect" style="flex:1;padding:4px;font-size:0.82rem;" onchange="renderPriceModal(window._priceGroups, this.value)">';
+    Object.keys(groups).forEach(n => {
+        html += '<option value="'+n+'"'+(n===activeGroup?' selected':'')+'>'+n+'（'+groups[n].months.join(',')+'月）</option>';
+    });
+    html += '</select>';
+    html += '<button onclick="priceAdd()" style="padding:4px 12px;background:#a5d6a7;border:none;border-radius:3px;cursor:pointer;font-size:0.82rem;">添加</button>';
+    html += '<button onclick="priceDelete()" style="padding:4px 12px;background:#a5d6a7;border:none;border-radius:3px;cursor:pointer;font-size:0.82rem;">删除</button>';
+    html += '</div>';
+    
+    // 月份
+    html += '<div style="margin-bottom:6px;"><label style="font-size:0.8rem;">月份(逗号分隔):</label>';
+    html += '<input type="text" id="priceMonths" style="width:150px;padding:3px 6px;margin-left:6px;" value="'+g.months.join(',')+'"></div>';
+    
+    // 24小时价格表
+    html += '<div style="max-height:350px;overflow-y:auto;margin-bottom:8px;">';
+    html += '<table style="width:100%;font-size:0.78rem;border-collapse:collapse;">';
+    html += '<tr><th style="background:#a5d6a7;padding:2px 6px;position:sticky;top:0;">小时</th>';
+    html += '<th style="background:#a5d6a7;padding:2px 6px;position:sticky;top:0;">电价(元/kWh)</th></tr>';
+    for (let h=0;h<24;h++) {
+        html += '<tr><td style="text-align:center;padding:1px;">'+h+':00</td>';
+        html += '<td><input type="number" class="priceInput" data-hour="'+h+'" style="width:100%;padding:2px 4px;" step="0.0001" value="'+(g.prices[h]||0)+'"></td></tr>';
+    }
+    html += '</table></div>';
+    
+    // 操作按钮
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button onclick="priceSave(\''+activeGroup+'\')" style="padding:6px 24px;background:#81c784;border:none;border-radius:4px;color:#fff;cursor:pointer;font-size:0.9rem;font-weight:700;">确认保存</button>';
+    html += '<button onclick="closeModal()" style="padding:6px 20px;background:#e0e0e0;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;">关闭</button>';
+    html += '</div>';
+    html += '</div>';
+    
+    showModal(html);
+}
+
+function priceSave(groupName) {
+    if (!window._priceGroups || !window._priceGroups[groupName]) return;
+    const months = document.getElementById('priceMonths').value.split(',').map(x => parseInt(x.trim())).filter(x => !isNaN(x));
+    if (!months.length) { alert('请至少输入一个月份'); return; }
+    const prices = [];
+    document.querySelectorAll('.priceInput').forEach(inp => {
+        prices.push(parseFloat(inp.value) || 0);
+    });
+    if (prices.length !== 24) { alert('需要24小时价格'); return; }
+    window._priceGroups[groupName] = {months: months, prices: prices};
+    alert('已保存: ' + groupName + '（' + months.join(',') + '月）');
+    renderPriceModal(window._priceGroups, groupName);
+}
+
+function priceAdd() {
+    const name = '新群组' + (Object.keys(window._priceGroups).length + 1);
+    window._priceGroups[name] = {months: [1], prices: Array(24).fill(0.417)};
+    renderPriceModal(window._priceGroups, name);
+}
+
+function priceDelete() {
+    const sel = document.getElementById('priceGroupSelect');
+    const name = sel.value;
+    if (Object.keys(window._priceGroups).length <= 1) { alert('至少保留一个群组'); return; }
+    if (confirm('确定删除群组"'+name+'"？')) {
+        delete window._priceGroups[name];
+        renderPriceModal(window._priceGroups, Object.keys(window._priceGroups)[0]);
+    }
+}
+
+function showOutputDir() {
+    fetch('/api/output-dir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
+    .then(r=>r.json())
+    .then(d => alert('计算结果自动保存到：\n' + d.path + '\n\n无需手动选择输出文件夹'));
+}
+
+function showModal(html) {
+    let m = document.getElementById('modalOverlay');
+    if (!m) { m = document.createElement('div'); m.id='modalOverlay'; document.body.appendChild(m); }
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    m.innerHTML = '<div style="position:relative;">'+html+'</div>';
+    m.onclick = function(e) { if (e.target===m) closeModal(); };
+}
+function closeModal() {
+    const m = document.getElementById('modalOverlay');
+    if (m) m.remove();
+}
 </script>
 {% endblock %}
