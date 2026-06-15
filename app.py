@@ -208,6 +208,52 @@ def logout():
     return redirect(url_for('index'))
 
 # ============================================================
+# 文件上传（保存到用户本地目录）
+# ============================================================
+import datetime as _dt
+from werkzeug.utils import secure_filename
+
+USER_DATA_ROOT = Path(r"C:\Users\dukm6\Desktop\power\users")
+
+@app.route('/api/upload', methods=['POST'])
+@login_required
+def api_upload():
+    if 'file' not in request.files:
+        return jsonify({"error": "未选择文件"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "未选择文件"}), 400
+    
+    ftype = request.form.get('type', 'load')
+    phone = current_user.phone
+    user_dir = USER_DATA_ROOT / phone
+    user_dir.mkdir(parents=True, exist_ok=True)
+    
+    ext = Path(file.filename).suffix or '.xlsx'
+    save_path = user_dir / f"{ftype}_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
+    file.save(str(save_path))
+    
+    return jsonify({"success": True, "path": str(save_path), "filename": file.filename})
+
+@app.route('/api/user-data', methods=['GET'])
+@login_required
+def api_user_data():
+    user_dir = USER_DATA_ROOT / current_user.phone
+    if not user_dir.exists():
+        return jsonify({"files": [], "tasks": []})
+    files = sorted(
+        [{"name": f.name, "time": _dt.datetime.fromtimestamp(f.stat().st_mtime).strftime('%m-%d %H:%M'), "size": f'{f.stat().st_size/1024:.1f}KB'}
+         for f in user_dir.iterdir() if f.is_file()],
+        key=lambda x: x['time'], reverse=True
+    )[:20]
+    tasks = sorted(
+        [{"name": d.name, "time": _dt.datetime.fromtimestamp(d.stat().st_mtime).strftime('%m-%d %H:%M')}
+         for d in user_dir.iterdir() if d.is_dir()],
+        key=lambda x: x['time'], reverse=True
+    )[:20]
+    return jsonify({"files": files, "tasks": tasks})
+
+# ============================================================
 # 找回密码
 # ============================================================
 @app.route('/forgot-password', methods=['GET', 'POST'])
@@ -353,23 +399,50 @@ def _run_compute_task(task_id, task_type, params):
         db.session.commit()
 
 def _run_s1_compute(task, params):
-    """执行荷-储协同计算"""
+    """荷-储协同计算"""
     try:
         import numpy as np
         import pandas as pd
         from pathlib import Path
         
-        # 使用内置计算逻辑
-        # 从参数中获取配置
+        # 从数据库获取当前用户
+        user = User.query.get(task.user_id)
+        user_dir = USER_DATA_ROOT / user.phone if user else None
+        
+        # 读取参数
         battery_cap = float(params.get('battery_capacity_mw', 3))
         unit_invest = float(params.get('unit_investment', 700))
         annual_om = float(params.get('annual_om_cost', 42000))
+        capacity_price = float(params.get('capacity_price', 30))
+        charge_eff = float(params.get('charge_efficiency', 0.95))
+        discharge_eff = float(params.get('discharge_efficiency', 0.95))
+        max_c_rate = float(params.get('max_c_rate', 0.5))
         
-        # 生成模拟数据
-        hours = 8760
-        t = np.arange(hours)
-        load = 2000 * (0.3 * np.sin(2*np.pi*t/24) + 0.7) * (0.1 * np.sin(2*np.pi*t/168) + 0.9) * (0.2 * np.sin(2*np.pi*t/8760) + 0.8)
-        load = np.abs(load + np.random.normal(0, 200, hours))
+        # 尝试加载用户上传的负荷文件
+        load_data = None
+        if user_dir and user_dir.exists():
+            load_files = sorted(user_dir.glob('load_*.xlsx'), key=lambda x: x.stat().st_mtime, reverse=True)
+            if load_files:
+                try:
+                    df = pd.read_excel(load_files[0])
+                    if 'Load' in df.columns:
+                        load_data = df['Load'].values[:8760]
+                    elif len(df.columns) >= 2:
+                        load_data = df.iloc[:, 1].values[:8760]
+                    task.error_message = f'使用文件: {load_files[0].name}'
+                except Exception as e:
+                    task.error_message = f'文件读取失败: {e}'
+        
+        # 未找到文件则生成模拟数据
+        if load_data is None:
+            hours = 8760
+            t = np.arange(hours)
+            load = 2000 * (0.3 * np.sin(2*np.pi*t/24) + 0.7) * (0.1 * np.sin(2*np.pi*t/168) + 0.9) * (0.2 * np.sin(2*np.pi*t/8760) + 0.8)
+            load = np.abs(load + np.random.normal(0, 200, hours))
+            task.error_message = '未找到负荷文件，使用模拟数据'
+        else:
+            load = np.abs(load_data)
+            hours = len(load)
         
         # 分时电价
         prices = np.ones(hours) * 0.6
@@ -427,9 +500,10 @@ def _run_s1_compute(task, params):
         investment = unit_invest * cap_kw
         payback = investment / first_year_profit if first_year_profit > 0 else float('inf')
         
-        # 保存结果
-        result_dir = Path(app.config['UPLOAD_FOLDER']) / f'task_{task.id}'
-        result_dir.mkdir(exist_ok=True)
+        # 保存结果到用户专属目录
+        import datetime as _dt
+        result_dir = Path(r'C:\Users\dukm6\Desktop\power\users') / current_user.phone / f's1_{task.id}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        result_dir.mkdir(parents=True, exist_ok=True)
         
         df = pd.DataFrame({
             'Hour': range(hours),
@@ -550,9 +624,10 @@ def _run_s2_compute(task, params):
         first_year_profit = elec_profit + cap_saving + purchase_saving * 0.3 - annual_om
         payback = investment / first_year_profit if first_year_profit > 0 else float('inf')
         
-        # 保存结果
-        result_dir = Path(app.config['UPLOAD_FOLDER']) / f'task_{task.id}'
-        result_dir.mkdir(exist_ok=True)
+        # 保存结果到用户专属目录
+        import datetime as _dt
+        result_dir = Path(r'C:\Users\dukm6\Desktop\power\users') / current_user.phone / f's2_{task.id}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        result_dir.mkdir(parents=True, exist_ok=True)
         
         df = pd.DataFrame({
             'Hour': range(hours),
