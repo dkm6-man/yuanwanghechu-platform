@@ -564,11 +564,14 @@ function loadCharts(taskId, type, chartIds) {
         let a = '', b = '';
         data.charts.forEach(c => {
             const img = '<div style="margin:4px;"><img src="'+c.url+'" style="max-width:100%;border:1px solid #ddd;border-radius:4px;" /></div>';
-            // 生命周期图 / 散点图放chartA，月度收益/预测对比放chartB
-            if (c.name.includes('生命周期') || c.name.includes('散点') || c.name.includes('预测对比')) {
-                a += img;
-            } else {
+            if (c.name.includes('预测对比')) {
+                a += img;  // 预测对比放左侧
+            } else if (c.name.includes('生命周期')) {
+                b += img;  // 全生命周期放右侧
+            } else if (c.name.includes('月度收益') || c.name.includes('月度套利')) {
                 b += img;
+            } else {
+                a += img;
             }
         });
         if (chartIds.chartA) document.getElementById(chartIds.chartA).innerHTML = a || '<div style="padding:40px;color:#999;">无图表</div>';
