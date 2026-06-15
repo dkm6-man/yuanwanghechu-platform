@@ -538,7 +538,7 @@ def _run_s1_compute(task, params):
         
         # 保存结果到用户专属目录
         import datetime as _dt
-        result_dir = Path(r'C:\Users\dukm6\Desktop\power\users') / current_user.phone / f's1_{task.id}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        result_dir = Path(r'C:\Users\dukm6\Desktop\power\users') / user.phone / f's1_{task.id}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
         result_dir.mkdir(parents=True, exist_ok=True)
         
         df = pd.DataFrame({
@@ -662,7 +662,7 @@ def _run_s2_compute(task, params):
         
         # 保存结果到用户专属目录
         import datetime as _dt
-        result_dir = Path(r'C:\Users\dukm6\Desktop\power\users') / current_user.phone / f's2_{task.id}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        result_dir = Path(r'C:\Users\dukm6\Desktop\power\users') / user.phone / f's2_{task.id}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
         result_dir.mkdir(parents=True, exist_ok=True)
         
         df = pd.DataFrame({
