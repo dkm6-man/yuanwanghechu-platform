@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}电-荷-储协同计算 - 源网荷储一体化计算平台{% endblock %}
+{% block content %}
+<h2>🌞 电-荷-储协同优化计算</h2>
+<p style="color:var(--text-light);margin-bottom:20px;">结合光伏、风电出力预测，进行多能互补优化调度与电力市场交易策略</p>
+
+<div class="compute-container">
+    <div class="compute-sidebar">
+        <h3>📐 计算参数</h3>
+        
+        <div class="param-group">
+            <label>电池容量 (MW)</label>
+            <input type="number" id="battery_capacity_mw" value="3" step="0.1" min="0.1">
+        </div>
+        
+        <div class="param-group">
+            <label>光伏装机 (MW)</label>
+            <input type="number" id="pv_capacity_mw" value="45" step="1" min="0">
+        </div>
+        
+        <div class="param-group">
+            <label>风电装机 (MW)</label>
+            <input type="number" id="wind_capacity_mw" value="10" step="1" min="0">
+        </div>
+        
+        <div class="param-group">
+            <label>基准购电均价 (元/kWh)</label>
+            <input type="number" id="grid_avg_price" value="0.6" step="0.01" min="0">
+        </div>
+        
+        <div class="param-group">
+            <label>单位投资 (元/kW)</label>
+            <input type="number" id="unit_investment" value="700" step="10">
+        </div>
+        
+        <div class="param-group">
+            <label>年运维费用 (元)</label>
+            <input type="number" id="annual_om_cost" value="42000" step="1000">
+        </div>
+        
+        <div class="param-group">
+            <label>容量电价 (元/kW·月)</label>
+            <input type="number" id="capacity_price" value="30" step="1">
+        </div>
+        
+        <div class="param-group">
+            <label>充电效率</label>
+            <input type="number" id="charge_efficiency" value="0.95" step="0.01" min="0.5" max="1">
+        </div>
+        
+        <div class="param-group">
+            <label>放电效率</label>
+            <input type="number" id="discharge_efficiency" value="0.95" step="0.01" min="0.5" max="1">
+        </div>
+        
+        <div class="param-group">
+            <label>最大倍率 (C)</label>
+            <input type="number" id="max_c_rate" value="0.5" step="0.1" min="0.1">
+        </div>
+        
+        <div class="param-group">
+            <label>仿真时长 (小时)</label>
+            <select id="sim_hours">
+                <option value="8760">全年 (8760h)</option>
+                <option value="4380">半年 (4380h)</option>
+                <option value="2160">一季度 (2160h)</option>
+                <option value="720">一月 (720h)</option>
+            </select>
+        </div>
+
+        <button class="btn-compute" id="btnStart" onclick="startCompute()">
+            🚀 开始计算
+        </button>
+
+        <div class="progress-bar" style="display:none;" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <p id="progressText" style="text-align:center;font-size:0.85rem;color:var(--text-light);margin-top:8px;"></p>
+        <p id="resultLink" style="text-align:center;margin-top:8px;"></p>
+    </div>
+
+    <div class="compute-main">
+        <h3>📊 计算结果</h3>
+        <div id="resultArea">
+            <p style="color:var(--text-light);text-align:center;padding:60px 0;">
+                配置左侧参数后，点击"开始计算"按钮<br>
+                计算结果将在此处展示<br><br>
+                <span style="font-size:0.85rem;color:#999;">
+                    提示：电-荷-储协同计算需考虑光伏/风电出力时序特性
+                </span>
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+let taskId = null;
+let pollInterval = null;
+
+function startCompute() {
+    const btn = document.getElementById('btnStart');
+    btn.disabled = true;
+    btn.textContent = '⏳ 启动中...';
+    
+    document.getElementById('progressBar').style.display = 'block';
+    document.getElementById('progressFill').style.width = '0%';
+    document.getElementById('progressText').textContent = '正在初始化电-荷-储协同计算...';
+    document.getElementById('resultLink').innerHTML = '';
+    
+    const params = {
+        battery_capacity_mw: parseFloat(document.getElementById('battery_capacity_mw').value) || 3,
+        pv_capacity_mw: parseFloat(document.getElementById('pv_capacity_mw').value) || 45,
+        wind_capacity_mw: parseFloat(document.getElementById('wind_capacity_mw').value) || 10,
+        grid_avg_price: parseFloat(document.getElementById('grid_avg_price').value) || 0.6,
+        unit_investment: parseFloat(document.getElementById('unit_investment').value) || 700,
+        annual_om_cost: parseFloat(document.getElementById('annual_om_cost').value) || 42000,
+        capacity_price: parseFloat(document.getElementById('capacity_price').value) || 30,
+        charge_efficiency: parseFloat(document.getElementById('charge_efficiency').value) || 0.95,
+        discharge_efficiency: parseFloat(document.getElementById('discharge_efficiency').value) || 0.95,
+        max_c_rate: parseFloat(document.getElementById('max_c_rate').value) || 0.5,
+        sim_hours: parseInt(document.getElementById('sim_hours').value) || 8760,
+    };
+    
+    fetch('/api/compute/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_type: 's2', params: params })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('启动失败: ' + data.error);
+            btn.disabled = false;
+            btn.textContent = '🚀 开始计算';
+            return;
+        }
+        taskId = data.task_id;
+        btn.textContent = '🔄 计算中...';
+        pollTask();
+    })
+    .catch(err => {
+        alert('请求失败: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = '🚀 开始计算';
+    });
+}
+
+function pollTask() {
+    if (!taskId) return;
+    
+    fetch('/api/task/' + taskId + '/status')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('progressFill').style.width = data.progress + '%';
+            document.getElementById('progressText').textContent = 
+                data.status === 'running' ? '计算中... ' + data.progress + '%' :
+                data.status === 'completed' ? '✅ 计算完成！' :
+                data.status === 'failed' ? '❌ 计算失败' : '等待中...';
+            
+            if (data.status === 'completed') {
+                document.getElementById('btnStart').disabled = false;
+                document.getElementById('btnStart').textContent = '🚀 重新计算';
+                document.getElementById('resultLink').innerHTML = 
+                    '<a href="/api/task/' + taskId + '/download" class="btn-action" style="display:inline-block;margin-top:10px;">📥 下载结果</a>';
+                showResult();
+            } else if (data.status === 'failed') {
+                document.getElementById('btnStart').disabled = false;
+                document.getElementById('btnStart').textContent = '🚀 重新计算';
+                document.getElementById('resultArea').innerHTML = 
+                    '<p style="color:red;">计算失败，请检查参数后重试</p>';
+            } else {
+                pollInterval = setTimeout(pollTask, 2000);
+            }
+        })
+        .catch(err => {
+            document.getElementById('progressText').textContent = '查询状态失败';
+            setTimeout(pollTask, 3000);
+        });
+}
+
+function showResult() {
+    const resultArea = document.getElementById('resultArea');
+    const pvCap = parseFloat(document.getElementById('pv_capacity_mw').value) || 45;
+    const windCap = parseFloat(document.getElementById('wind_capacity_mw').value) || 10;
+    const batteryCap = parseFloat(document.getElementById('battery_capacity_mw').value) || 3;
+    
+    resultArea.innerHTML = `
+        <table class="result-table">
+            <tr><th>指标</th><th>数值</th></tr>
+            <tr><td>光伏装机</td><td>${pvCap} MW</td></tr>
+            <tr><td>风电装机</td><td>${windCap} MW</td></tr>
+            <tr><td>储能容量</td><td>${batteryCap} MW / ${(batteryCap*1000).toFixed(0)} kW</td></tr>
+            <tr><td>绿电总装机</td><td>${(pvCap + windCap)} MW</td></tr>
+            <tr><td colspan="2" style="color:green;">✅ 详细结果请下载结果文件查看<br>
+                <small>包含：储能套利收益、需量节省、购电节省、绿电消纳量等</small>
+            </td></tr>
+        </table>
+    `;
+}
+</script>
+{% endblock %}

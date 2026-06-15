@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}源网荷储一体化计算平台{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">⚡ 源网荷储一体化计算平台</a>
+            <div class="nav-links">
+                {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('dashboard') }}">控制台</a>
+                    <a href="{{ url_for('compute_s1') }}">荷-储协同</a>
+                    <a href="{{ url_for('compute_s2') }}">电-荷-储协同</a>
+                    {% if current_user.is_admin %}
+                    <a href="{{ url_for('admin_panel') }}" class="admin-link">🔧 管理</a>
+                    {% endif %}
+                    <span class="nav-user">{{ current_user.username }}</span>
+                    <a href="{{ url_for('logout') }}" class="btn-logout">退出</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}">登录</a>
+                    <a href="{{ url_for('register') }}" class="btn-register">注册</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash消息 -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-container">
+        {% for category, message in messages %}
+        <div class="flash-message flash-{{ category }}">
+            {{ message }}
+            <span class="flash-close" onclick="this.parentElement.remove()">&times;</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- 主内容 -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+        <p>&copy; 2024 源网荷储一体化计算平台 | <a href="{{ url_for('agreement') }}">用户协议</a></p>
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
