@@ -403,24 +403,46 @@ _queue_order = []                         # 等待队列顺序
 _queue_lock = threading.Lock()
 
 def _worker_loop():
-    """后台工作线程：从队列取任务逐个执行"""
+    """后台工作线程"""
     while True:
         try:
             task_id, task_type, params = _compute_queue.get(timeout=5)
         except _queue.Empty:
+            continue
+        except Exception as e:
+            print(f'Worker error: {e}')
             continue
         
         with _queue_lock:
             if task_id in _queue_order:
                 _queue_order.remove(task_id)
         
-        _run_compute_task(task_id, task_type, params)
+        try:
+            _run_compute_task(task_id, task_type, params)
+        except Exception as e:
+            print(f'Task {task_id} failed: {e}')
+            with app.app_context():
+                task = ComputeTask.query.get(task_id)
+                if task and task.status == 'running':
+                    task.status = 'failed'
+                    task.error_message = str(e)[:200]
+                    db.session.commit()
         _compute_queue.task_done()
 
 # 启动工作线程
+_worker_count = _MAX_WORKERS
 for _ in range(_MAX_WORKERS):
     t = threading.Thread(target=_worker_loop, daemon=True)
     t.start()
+
+# 启动时清理卡住的任务
+with app.app_context():
+    stuck = ComputeTask.query.filter(ComputeTask.status.in_(['running', 'pending'])).all()
+    for t in stuck:
+        t.status = 'failed'
+        t.error_message = '服务器重启'
+    if stuck:
+        db.session.commit()
 
 # ============================================================
 # API: 执行计算任务
