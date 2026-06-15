@@ -1,83 +1,492 @@
 {% extends "base.html" %}
 {% block title %}控制台 - 源网荷储一体化计算平台{% endblock %}
+
+{% block extra_css %}
+<style>
+.tab-bar { background: #90a4ae; display: flex; height: 50px; margin: -30px -20px 0; }
+.tab-btn { 
+    flex:1; border: none; cursor: pointer; font-size: 0.95rem; font-weight: 700;
+    color: #1b1b1b; transition: all 0.15s; font-family: inherit;
+    border-right: 1px solid rgba(0,0,0,0.1);
+}
+.tab-btn:last-child { border-right: none; }
+.tab-btn.active { box-shadow: inset 0 -3px 0 rgba(0,0,0,0.15); }
+.tab-s1 { background: #e8f5e9; } .tab-s1.active { background: #a5d6a7; }
+.tab-s2 { background: #e3f2fd; } .tab-s2.active { background: #90caf9; }
+.tab-s3 { background: #fff3e0; } .tab-s3.active { background: #ffcc80; }
+.tab-content { display: none; padding: 15px 0 0; }
+.tab-content.active { display: block; }
+
+/* 原始GUI样式 */
+.gui-content { font-family: 'Microsoft YaHei',sans-serif; }
+.gui-section { 
+    border: 2px solid #4caf50; border-radius: 6px; padding: 8px 12px 10px; margin-bottom: 8px;
+    position: relative;
+}
+.gui-section.s1 { background: #e8f5e9; border-color: #a5d6a7; }
+.gui-section.s2 { background: #e3f2fd; border-color: #90caf9; }
+.gui-section.s3 { background: #fff3e0; border-color: #ffcc80; }
+.gui-section.s2a { background: #c1e7d8; border-color: #80cbc4; }
+.gui-section-title {
+    font-size: 0.92rem; font-weight: 700; color: #1b5e20; margin-bottom: 6px;
+}
+.gui-section.s2 .gui-section-title { color: #0d47a1; }
+.gui-section.s3 .gui-section-title { color: #e65100; }
+.gui-section.s2a .gui-section-title { color: #004d40; }
+
+.gui-btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.gui-btn {
+    padding: 6px 14px; border: 1px solid #bdbdbd; border-radius: 3px;
+    font-size: 0.78rem; cursor: pointer; font-family: inherit; font-weight: 600;
+    transition: background 0.15s;
+}
+.gui-btn:hover { filter: brightness(0.95); }
+.btn-data { background: #c8e6c9; color: #1b5e20; }
+.btn-data2 { background: #bbdefb; color: #0d47a1; }
+.btn-weather { background: #ffb74d; color: #e65100; }
+.btn-go { background: #81c784; color: #fff; font-size: 0.9rem; font-weight: 700; padding: 7px 22px; }
+.btn-pause { background: #ffcc80; color: #e65100; }
+.btn-resume { background: #a5d6a7; color: #1b5e20; }
+.btn-stop { background: #ef9a9a; color: #c62828; }
+.btn-save { background: #b39ddb; color: #311b92; }
+.gui-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.gui-param-grid { display: grid; gap: 3px 12px; }
+.gui-param-grid.c3 { grid-template-columns: repeat(3, 1fr); }
+.gui-param-grid.c4 { grid-template-columns: repeat(4, 1fr); }
+.gui-param-grid.c5 { grid-template-columns: repeat(5, 1fr); }
+.gui-field { display: flex; align-items: center; gap: 6px; }
+.gui-field label { font-size: 0.78rem; white-space: nowrap; min-width: fit-content; }
+.gui-field input, .gui-field select {
+    flex: 1; padding: 4px 6px; border: 1px solid #bdbdbd; border-radius: 3px;
+    font-size: 0.78rem; background: #fff; min-width: 50px; font-family: inherit;
+}
+.gui-field input:disabled { background: #f5f5f5; color: #999; }
+.gui-field input[type=text] { min-width: 80px; }
+
+.gui-radio-row { display: flex; gap: 18px; }
+.gui-radio { display: flex; align-items: center; gap: 4px; font-size: 0.82rem; cursor: pointer; }
+
+.gui-ctrl-row { display: flex; align-items: center; gap: 12px; }
+.gui-ctrl-btns { display: flex; gap: 5px; }
+.gui-status { font-size: 0.8rem; color: #757575; margin-left: auto; min-width: 200px; text-align: right; }
+.gui-progress-wrap { flex: 1; display: flex; align-items: center; gap: 8px; }
+.gui-progress { flex: 1; height: 16px; background: #e0e0e0; border-radius: 8px; overflow: hidden; border: 1px solid #bdbdbd; }
+.gui-progress-fill { height: 100%; width: 0%; background: #81c784; border-radius: 8px; transition: width 0.3s; }
+
+.gui-kpi { text-align: center; padding: 6px 4px; background: #fafafa; border-radius: 4px; border: 1px solid #e0e0e0; }
+.gui-kpi-label { display: block; font-size: 0.68rem; color: #666; }
+.gui-kpi-val { display: block; font-size: 1rem; font-weight: 700; color: #2e7d32; }
+.gui-kpi-row { display: grid; gap: 8px; margin-bottom: 8px; }
+.gui-kpi-row.c4 { grid-template-columns: repeat(4, 1fr); }
+.gui-kpi-row.c5 { grid-template-columns: repeat(5, 1fr); }
+
+.gui-charts { display: grid; gap: 8px; }
+.gui-charts.c2 { grid-template-columns: 1fr 1fr; }
+.gui-chart-box { border: 1px solid #bdbdbd; border-radius: 4px; min-height: 250px; background: #fafafa; }
+.gui-chart-hdr { padding: 5px 8px; background: #f5f5f5; font-size: 0.78rem; font-weight: 600; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+.gui-chart-hdr select { padding: 2px 4px; font-size: 0.75rem; }
+.gui-chart-body { padding: 8px; min-height: 220px; text-align: center; color: #999; display: flex; align-items: center; justify-content: center; }
+
+.gui-status-text { font-size: 0.75rem; padding: 3px 0; }
+.gui-status-text.red { color: #d32f2f; }
+.gui-status-text.green { color: #2e7d32; }
+
+.gui-download { text-align: center; margin-top: 8px; }
+.gui-download a { text-decoration: none; }
+
+@media (max-width: 900px) {
+    .gui-param-grid.c3, .gui-param-grid.c4, .gui-param-grid.c5 { grid-template-columns: repeat(2, 1fr); }
+    .gui-kpi-row.c4, .gui-kpi-row.c5 { grid-template-columns: repeat(2, 1fr); }
+    .gui-charts.c2 { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<h2 style="margin-bottom:10px;">👋 欢迎，{{ current_user.username }}
-    {% if current_user.is_admin %}<span style="color:var(--accent);font-size:0.85rem;">（管理员）</span>{% endif %}
-</h2>
-<p style="color:var(--text-light);margin-bottom:30px;">选择下方计算模块开始使用</p>
 
-<div class="dashboard">
-    <!-- 荷-储协同 -->
-    <div class="dash-card">
-        <h3>🔋 荷-储协同优化</h3>
-        <p>基于分时电价机制，利用MILP混合整数线性规划算法，优化储能系统充放电策略，实现峰谷套利和需量管理收益最大化。</p>
-        <p style="font-size:0.85rem;color:#999;">策略：理想最优(MILP) | Hybrid CNN-LSTM | Transformer</p>
-        <a href="{{ url_for('compute_s1') }}" class="btn-action">进入计算 →</a>
+<!-- 标签栏 -->
+<div class="tab-bar">
+    <button class="tab-btn tab-s1 active" onclick="switchTab('s1')">荷-储协同</button>
+    <button class="tab-btn tab-s2" onclick="switchTab('s2')">电-荷-储协同</button>
+    <button class="tab-btn tab-s3" onclick="switchTab('s3')">算-电-荷-储协同</button>
+</div>
+
+<!-- ==================== S1: 荷-储协同 ==================== -->
+<div class="tab-content active" id="tab-s1">
+<div class="gui-content">
+
+<!-- 数据文件 -->
+<div class="gui-section s1">
+    <div class="gui-section-title">数据文件</div>
+    <div class="gui-btn-row">
+        <button class="gui-btn btn-data" onclick="dlTemplate()">下载模板</button>
+        <button class="gui-btn btn-data" onclick="document.getElementById('s1FileLoad').click()">上传负荷文件</button>
+        <input type="file" id="s1FileLoad" accept=".xlsx,.xls" style="display:none" onchange="uploadFile(this,'load','s1FileStatus')">
+        <button class="gui-btn btn-data" onclick="alert('分时电价表格')">分时电价表格</button>
+        <button class="gui-btn btn-data" onclick="alert('选择输出文件夹')">输出文件夹</button>
     </div>
+    <div class="gui-status-text red" id="s1FileStatus">未上传负荷文件</div>
+</div>
 
-    <!-- 电-荷-储协同 -->
-    <div class="dash-card">
-        <h3>🌞 电-荷-储协同优化</h3>
-        <p>接入光伏、风电出力模型，进行多能互补优化调度。支持实时天气数据接口和市场化电价预测。</p>
-        <p style="font-size:0.85rem;color:#999;">功能：绿电消纳 | 购电优化 | 电力市场交易</p>
-        <a href="{{ url_for('compute_s2') }}" class="btn-action">进入计算 →</a>
+<!-- 技术及经济性参数 -->
+<div class="gui-section s1">
+    <div class="gui-section-title">技术及经济性参数</div>
+    <div class="gui-param-grid c3">
+        <div class="gui-field"><label>电池容量(MW)</label><input type="number" id="s1_battery" value="3" step="0.1"></div>
+        <div class="gui-field"><label>单位投资(元/kW)</label><input type="number" id="s1_unit_inv" value="700" step="10"></div>
+        <div class="gui-field"><label>年运维费(元)</label><input type="number" id="s1_om" value="42000" step="1000"></div>
+        <div class="gui-field"><label>容量电价(元/kW·月)</label><input type="number" id="s1_cap_price" value="30" step="1"></div>
+        <div class="gui-field"><label>充电效率</label><input type="number" id="s1_chg_eff" value="0.95" step="0.01"></div>
+        <div class="gui-field"><label>放电效率</label><input type="number" id="s1_dis_eff" value="0.95" step="0.01"></div>
+        <div class="gui-field"><label>放电深度DOD</label><input type="number" id="s1_dod" value="0.9" step="0.05"></div>
+        <div class="gui-field"><label>最大循环次数</label><input type="number" id="s1_cycles" value="6000" step="100"></div>
+        <div class="gui-field"><label>最大倍率C</label><input type="number" id="s1_crate" value="0.5" step="0.1"></div>
+        <div class="gui-field"><label>折现率</label><input type="number" id="s1_discount" value="0.08" step="0.01"></div>
     </div>
+</div>
 
-    <!-- 算-电-荷-储协同 -->
-    <div class="dash-card">
-        <h3>💻 算-电-荷-储协同</h3>
-        <p>结合数据中心算力需求，进行算力-电力联合优化调度。实现计算任务与能源消耗的最优匹配。</p>
-        <p style="font-size:0.85rem;color:#999;">状态：🚧 开发中，敬请期待</p>
-        <a href="{{ url_for('compute_s3') }}" class="btn-action" style="background:#999;">预览 →</a>
+<!-- 策略 -->
+<div class="gui-section s1">
+    <div class="gui-radio-row">
+        <label class="gui-radio"><input type="radio" name="s1_strat" value="MILP" checked onchange="s1ToggleParams()"> 理想最优(MILP)</label>
+        <label class="gui-radio"><input type="radio" name="s1_strat" value="Hybrid" onchange="s1ToggleParams()"> 混合预测(CNN-LSTM)</label>
+        <label class="gui-radio"><input type="radio" name="s1_strat" value="Transformer" onchange="s1ToggleParams()"> Transformer预测</label>
     </div>
+</div>
 
-    <!-- 历史任务 -->
-    <div class="dash-card">
-        <h3>📋 我的计算任务</h3>
-        <div id="taskList">
-            <p style="color:var(--text-light);">加载中...</p>
+<!-- 滚动预测参数 -->
+<div class="gui-section s1" id="s1RollingParams">
+    <div class="gui-section-title">滚动预测参数</div>
+    <div class="gui-param-grid c4">
+        <div class="gui-field"><label>训练集时长(小时)</label><input type="number" id="s1_train_hrs" value="336" disabled></div>
+        <div class="gui-field"><label>微调间隔(小时)</label><input type="number" id="s1_ft_int" value="1" disabled></div>
+        <div class="gui-field"><label>仿真时长(小时)</label><input type="number" id="s1_sim_hrs" value="4380" disabled></div>
+        <div class="gui-field"><label>开始时间(小时)</label><input type="number" id="s1_start_hr" value="0" disabled></div>
+        <div class="gui-field"><label>预测步长(小时)</label><input type="number" id="s1_pred_len" value="1" disabled></div>
+    </div>
+</div>
+
+<!-- 控制 -->
+<div class="gui-section s1">
+    <div class="gui-ctrl-row">
+        <div class="gui-ctrl-btns">
+            <button class="gui-btn btn-go" id="s1calc" onclick="runS1()">计  算</button>
+            <button class="gui-btn btn-pause" id="s1pause" disabled>暂停</button>
+            <button class="gui-btn btn-resume" id="s1resume" disabled>继续</button>
+            <button class="gui-btn btn-stop" id="s1stop" disabled>结束</button>
+        </div>
+        <div class="gui-progress-wrap">
+            <div class="gui-progress"><div class="gui-progress-fill" id="s1prog"></div></div>
+        </div>
+        <div class="gui-status" id="s1status">就绪</div>
+    </div>
+</div>
+
+<!-- 结果 -->
+<div class="gui-section s1">
+    <div class="gui-section-title">结果输出</div>
+    <div class="gui-kpi-row c4">
+        <div class="gui-kpi"><span class="gui-kpi-label">首年综合盈利(元)</span><span class="gui-kpi-val" id="s1kpi1">--</span></div>
+        <div class="gui-kpi"><span class="gui-kpi-label">回收期(年)</span><span class="gui-kpi-val" id="s1kpi2">--</span></div>
+        <div class="gui-kpi"><span class="gui-kpi-label">全生命周期盈亏(元)</span><span class="gui-kpi-val" id="s1kpi3">--</span></div>
+        <div class="gui-kpi"><span class="gui-kpi-label">电池6000次循环时间(年)</span><span class="gui-kpi-val" id="s1kpi4">--</span></div>
+    </div>
+    <div class="gui-charts c2" id="s1charts" style="display:none;">
+        <div class="gui-chart-box">
+            <div class="gui-chart-hdr">
+                <span>典型日预测对比</span>
+                <select id="s1month" onchange="s1UpdateChart()">
+                    <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+                    <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+                    <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+                    <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+                </select>
+            </div>
+            <div class="gui-chart-body" id="s1chartA">等待计算...</div>
+        </div>
+        <div class="gui-chart-box">
+            <div class="gui-chart-hdr"><span>月度收益分析</span></div>
+            <div class="gui-chart-body" id="s1chartB">等待计算...</div>
         </div>
     </div>
+    <div class="gui-download" id="s1dl" style="display:none;"><a id="s1dllink" class="gui-btn btn-save" href="#">📥 下载计算结果</a></div>
 </div>
 
-{% if current_user.is_admin %}
-<div style="margin-top:30px;padding:20px;background:#fff3e0;border-radius:var(--radius);border:1px solid #ffe0b2;">
-    <h3 style="color:var(--accent);">🔧 管理员快捷操作</h3>
-    <p style="margin:10px 0;">
-        <a href="{{ url_for('admin_panel') }}" class="btn-action" style="background:var(--accent);">进入管理后台</a>
-    </p>
 </div>
-{% endif %}
+</div>
+
+<!-- ==================== S2: 电-荷-储协同 ==================== -->
+<div class="tab-content" id="tab-s2">
+<div class="gui-content">
+
+<div class="gui-section s2">
+    <div class="gui-section-title">数据文件</div>
+    <div class="gui-btn-row">
+        <button class="gui-btn btn-data2" onclick="document.getElementById('s2FileLoad').click()">上传历史负荷</button>
+        <input type="file" id="s2FileLoad" accept=".xlsx,.xls" style="display:none" onchange="uploadFile(this,'load','s2DataStatus')">
+        <button class="gui-btn btn-data2" onclick="document.getElementById('s2FileWeather').click()">上传历史天气</button>
+        <input type="file" id="s2FileWeather" accept=".xlsx,.xls" style="display:none" onchange="uploadFile(this,'weather','s2DataStatus')">
+        <button class="gui-btn btn-data2" onclick="document.getElementById('s2FilePrice').click()">上传市场化电价</button>
+        <input type="file" id="s2FilePrice" accept=".xlsx,.xls" style="display:none" onchange="uploadFile(this,'price','s2DataStatus')">
+        <button class="gui-btn btn-data2" onclick="alert('API获取天气')">API获取天气</button>
+        <button class="gui-btn btn-data2" onclick="alert('选择输出文件夹')">输出文件夹</button>
+        <button class="gui-btn btn-data2" onclick="showDataStatus('s2DataStatus')">显示数据状态</button>
+    </div>
+    <div class="gui-status-text red" id="s2DataStatus">状态:未加载</div>
+</div>
+
+<div class="gui-section s2">
+    <div class="gui-section-title">技术及经济性参数</div>
+    <div class="gui-param-grid c3">
+        <div class="gui-field"><label>电池容量(MW)</label><input type="number" id="s2_battery" value="3" step="0.1"></div>
+        <div class="gui-field"><label>单位投资(元/kW)</label><input type="number" id="s2_unit_inv" value="700" step="10"></div>
+        <div class="gui-field"><label>年运维费(元)</label><input type="number" id="s2_om" value="42000" step="1000"></div>
+        <div class="gui-field"><label>容量电价(元/kW·月)</label><input type="number" id="s2_cap_price" value="30" step="1"></div>
+        <div class="gui-field"><label>充电效率</label><input type="number" id="s2_chg_eff" value="0.95" step="0.01"></div>
+        <div class="gui-field"><label>放电效率</label><input type="number" id="s2_dis_eff" value="0.95" step="0.01"></div>
+        <div class="gui-field"><label>放电深度DOD</label><input type="number" id="s2_dod" value="0.9" step="0.05"></div>
+        <div class="gui-field"><label>循环次数</label><input type="number" id="s2_cycles" value="6000" step="100"></div>
+        <div class="gui-field"><label>最大倍率C</label><input type="number" id="s2_crate" value="0.5" step="0.1"></div>
+    </div>
+</div>
+
+<div class="gui-section s2a" style="background:#c1e7d8;border-color:#80cbc4;">
+    <div class="gui-section-title" style="color:#004d40;">绿电资源配置</div>
+    <div class="gui-param-grid c3">
+        <div class="gui-field"><label>光伏装机(MW)</label><input type="number" id="s2_pv" value="45" step="1"></div>
+        <div class="gui-field"><label>风电装机(MW)</label><input type="number" id="s2_wind" value="10" step="1"></div>
+        <div class="gui-field"><label>基准购电均价(元/度)</label><input type="number" id="s2_avg_price" value="0.6" step="0.01"></div>
+        <div class="gui-field"><label>城市</label><input type="text" id="s2_city" value="Beijing"></div>
+        <div class="gui-field"><button class="gui-btn btn-weather">获取天气预报</button></div>
+        <div class="gui-field"><span class="gui-status-text" id="s2WeatherStatus" style="grid-column:span 2;">未获取预报</span></div>
+    </div>
+</div>
+
+<div class="gui-section s2">
+    <div class="gui-section-title">电-荷-储协同预测参数</div>
+    <div class="gui-param-grid c4">
+        <div class="gui-field"><label>训练集时长(小时)</label><input type="number" id="s2_train_hrs" value="336"></div>
+        <div class="gui-field"><label>微调间隔(小时)</label><input type="number" id="s2_ft_int" value="2"></div>
+        <div class="gui-field"><label>仿真时长(小时)</label><input type="number" id="s2_sim_hrs" value="8760"></div>
+        <div class="gui-field"><label>开始时间(小时)</label><input type="number" id="s2_start_hr" value="0"></div>
+    </div>
+</div>
+
+<div class="gui-section s2">
+    <div class="gui-ctrl-row">
+        <div class="gui-ctrl-btns">
+            <button class="gui-btn btn-go" id="s2calc" onclick="runS2()">计  算</button>
+            <button class="gui-btn btn-pause" id="s2pause" disabled>暂停</button>
+            <button class="gui-btn btn-resume" id="s2resume" disabled>继续</button>
+            <button class="gui-btn btn-stop" id="s2stop" disabled>结束</button>
+        </div>
+        <div class="gui-progress-wrap">
+            <div class="gui-progress"><div class="gui-progress-fill" id="s2prog"></div></div>
+        </div>
+        <div class="gui-status" id="s2status">就绪</div>
+    </div>
+</div>
+
+<div class="gui-section s2">
+    <div class="gui-section-title">结果输出</div>
+    <div class="gui-kpi-row c5">
+        <div class="gui-kpi"><span class="gui-kpi-label">储能套利(元)</span><span class="gui-kpi-val" id="s2kpi1">--</span></div>
+        <div class="gui-kpi"><span class="gui-kpi-label">需量节省(元)</span><span class="gui-kpi-val" id="s2kpi2">--</span></div>
+        <div class="gui-kpi"><span class="gui-kpi-label">购电节省(元)</span><span class="gui-kpi-val" id="s2kpi3">--</span></div>
+        <div class="gui-kpi"><span class="gui-kpi-label">总收益(元)</span><span class="gui-kpi-val" id="s2kpi4">--</span></div>
+        <div class="gui-kpi"><span class="gui-kpi-label">回收期(年)</span><span class="gui-kpi-val" id="s2kpi5">--</span></div>
+    </div>
+    <div class="gui-charts c2" id="s2charts" style="display:none;">
+        <div class="gui-chart-box">
+            <div class="gui-chart-hdr"><span>负荷预测对比</span></div>
+            <div class="gui-chart-body" id="s2chartA">等待计算...</div>
+        </div>
+        <div class="gui-chart-box">
+            <div class="gui-chart-hdr"><span>电价预测对比</span></div>
+            <div class="gui-chart-body" id="s2chartB">等待计算...</div>
+        </div>
+        <div class="gui-chart-box" style="grid-column:1/-1;">
+            <div class="gui-chart-hdr"><span>电源供给结构</span></div>
+            <div class="gui-chart-body" id="s2chartC">等待计算...</div>
+        </div>
+    </div>
+    <div class="gui-download" id="s2dl" style="display:none;"><a id="s2dllink" class="gui-btn btn-save" href="#">📥 下载计算结果</a></div>
+</div>
+
+</div>
+</div>
+
+<!-- ==================== S3: 算-电-荷-储 ==================== -->
+<div class="tab-content" id="tab-s3" style="background:#fff3e0;min-height:400px;display:flex;align-items:center;justify-content:center;">
+    <div style="text-align:center;color:#9e9e9e;font-size:1.4rem;font-weight:700;">
+        🚧 第三步功能开发中 🚧<br><span style="font-size:0.9rem;">敬请期待</span>
+    </div>
+</div>
 
 <script>
-// 加载任务列表
-fetch('/api/tasks')
+// ===== Tab 切换 =====
+function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display='none');
+    document.querySelector('.tab-' + tab).classList.add('active');
+    document.getElementById('tab-' + tab).style.display = s3Check(tab);
+}
+function s3Check(t) { return t==='s3' ? 'flex' : 'block'; }
+
+// ===== S1 参数控制 =====
+function s1ToggleParams() {
+    const st = document.querySelector('input[name="s1_strat"]:checked').value;
+    const dis = st === 'MILP';
+    ['s1_train_hrs','s1_ft_int','s1_sim_hrs','s1_start_hr','s1_pred_len'].forEach(id => document.getElementById(id).disabled = dis);
+}
+
+// ===== 文件上传 =====
+function uploadFile(input, type, statusId) {
+    const file = input.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('type', type);
+    document.getElementById(statusId).textContent = '上传中...';
+    document.getElementById(statusId).className = 'gui-status-text';
+    fetch('/api/upload', {method:'POST',body:fd})
     .then(r => r.json())
-    .then(tasks => {
-        const list = document.getElementById('taskList');
-        if (tasks.length === 0) {
-            list.innerHTML = '<p style="color:var(--text-light);">暂无计算任务</p>';
-            return;
+    .then(d => {
+        if (d.success) {
+            document.getElementById(statusId).textContent = '✓ 已上传: ' + file.name;
+            document.getElementById(statusId).className = 'gui-status-text green';
+        } else {
+            document.getElementById(statusId).textContent = '✗ 失败: ' + (d.error||'未知');
+            document.getElementById(statusId).className = 'gui-status-text red';
         }
-        let html = '<table class="result-table"><tr><th>类型</th><th>状态</th><th>进度</th><th>时间</th><th>操作</th></tr>';
-        tasks.forEach(t => {
-            const statusColor = t.status === 'completed' ? 'green' : 
-                               t.status === 'running' ? 'blue' : 
-                               t.status === 'failed' ? 'red' : 'gray';
-            html += `<tr>
-                <td>${t.task_type}</td>
-                <td style="color:${statusColor}">${t.status}</td>
-                <td>${t.progress}%</td>
-                <td style="font-size:0.8rem">${t.created_at || '-'}</td>
-                <td>${t.status === 'completed' ? 
-                    `<a href="/api/task/${t.id}/download">下载</a>` : '-'}</td>
-            </tr>`;
-        });
-        html += '</table>';
-        list.innerHTML = html;
     })
-    .catch(err => {
-        document.getElementById('taskList').innerHTML = '<p style="color:red;">加载失败</p>';
+    .catch(e => {
+        document.getElementById(statusId).textContent = '✗ 上传失败';
+        document.getElementById(statusId).className = 'gui-status-text red';
     });
+}
+
+function showDataStatus(id) {
+    fetch('/api/user-data').then(r=>r.json()).then(d => {
+        let txt = '状态:';
+        if (d.files.length) txt += '✓文件('+d.files.length+')';
+        else txt += '未加载';
+        document.getElementById(id).textContent = txt;
+        document.getElementById(id).className = 'gui-status-text ' + (d.files.length ? 'green' : 'red');
+    });
+}
+// 页面加载时检查数据状态
+showDataStatus('s2DataStatus');
+
+// ===== S1 计算 =====
+function runS1() {
+    const st = document.querySelector('input[name="s1_strat"]:checked').value;
+    const params = {
+        battery_capacity_mw: +document.getElementById('s1_battery').value||3,
+        unit_investment: +document.getElementById('s1_unit_inv').value||700,
+        annual_om_cost: +document.getElementById('s1_om').value||42000,
+        capacity_price: +document.getElementById('s1_cap_price').value||30,
+        charge_efficiency: +document.getElementById('s1_chg_eff').value||0.95,
+        discharge_efficiency: +document.getElementById('s1_dis_eff').value||0.95,
+        dod: +document.getElementById('s1_dod').value||0.9,
+        cycle_life: +document.getElementById('s1_cycles').value||6000,
+        max_c_rate: +document.getElementById('s1_crate').value||0.5,
+        discount_rate: +document.getElementById('s1_discount').value||0.08,
+        strategy: st,
+        train_hours: st==='MILP'?336:+document.getElementById('s1_train_hrs').value||336,
+        ft_interval: st==='MILP'?1:+document.getElementById('s1_ft_int').value||1,
+        sim_hours: st==='MILP'?8760:+document.getElementById('s1_sim_hrs').value||4380,
+        start_hour: +document.getElementById('s1_start_hr').value||0,
+        pred_len: +document.getElementById('s1_pred_len').value||1,
+    };
+    doCompute('s1', params, ['s1calc','s1pause','s1stop'], 's1prog', 's1status',
+        {kpi1:'first_year_profit',kpi2:'payback',kpi3:'lifecycle_profit',kpi4:'life_years'},
+        {chartA:'s1chartA',chartB:'s1chartB',charts:'s1charts',dl:'s1dl',dllink:'s1dllink'});
+}
+
+// ===== S2 计算 =====
+function runS2() {
+    const params = {
+        battery_capacity_mw: +document.getElementById('s2_battery').value||3,
+        unit_investment: +document.getElementById('s2_unit_inv').value||700,
+        annual_om_cost: +document.getElementById('s2_om').value||42000,
+        capacity_price: +document.getElementById('s2_cap_price').value||30,
+        charge_efficiency: +document.getElementById('s2_chg_eff').value||0.95,
+        discharge_efficiency: +document.getElementById('s2_dis_eff').value||0.95,
+        dod: +document.getElementById('s2_dod').value||0.9,
+        cycle_life: +document.getElementById('s2_cycles').value||6000,
+        max_c_rate: +document.getElementById('s2_crate').value||0.5,
+        pv_capacity_mw: +document.getElementById('s2_pv').value||45,
+        wind_capacity_mw: +document.getElementById('s2_wind').value||10,
+        grid_avg_price: +document.getElementById('s2_avg_price').value||0.6,
+        city: document.getElementById('s2_city').value||'Beijing',
+        train_hours: +document.getElementById('s2_train_hrs').value||336,
+        ft_interval: +document.getElementById('s2_ft_int').value||2,
+        sim_hours: +document.getElementById('s2_sim_hrs').value||8760,
+        start_hour: +document.getElementById('s2_start_hr').value||0,
+    };
+    doCompute('s2', params, ['s2calc','s2pause','s2stop'], 's2prog', 's2status',
+        {kpi1:'electricity_profit',kpi2:'capacity_saving',kpi3:'purchase_saving',kpi4:'first_year_profit',kpi5:'payback'},
+        {chartA:'s2chartA',chartB:'s2chartB',charts:'s2charts',dl:'s2dl',dllink:'s2dllink'});
+}
+
+// ===== 通用计算函数 =====
+function doCompute(type, params, btns, progId, statusId, kpiIds, chartIds) {
+    btns.forEach((id,i) => { document.getElementById(id).disabled = i===0; });
+    if (btns[0]==='s1calc') document.getElementById('s1calc').textContent = '计算中...';
+    else document.getElementById('s2calc').textContent = '计算中...';
+    document.getElementById(progId).style.width = '2%';
+    document.getElementById(statusId).textContent = '启动中...';
+    Object.keys(kpiIds).forEach(k => document.getElementById(type+k).textContent = '--');
+    if (chartIds.charts) document.getElementById(chartIds.charts).style.display = 'none';
+    if (chartIds.dl) document.getElementById(chartIds.dl).style.display = 'none';
+
+    fetch('/api/compute/start', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({task_type:type==='s1'?'s1':'s2',params:params})
+    })
+    .then(r=>r.json())
+    .then(d=>{
+        if (d.error) { resetUI(type,btns,statusId); alert(d.error); return; }
+        pollTask(type, d.task_id, btns, progId, statusId, kpiIds, chartIds);
+    })
+    .catch(e => { resetUI(type,btns,statusId); alert('请求失败: '+e); });
+}
+
+function pollTask(type, taskId, btns, progId, statusId, kpiIds, chartIds) {
+    fetch('/api/task/'+taskId+'/status')
+    .then(r=>r.json())
+    .then(d=>{
+        document.getElementById(progId).style.width = (d.progress||0)+'%';
+        let txt = d.status==='running'?'计算中...'+(d.progress||0)+'%':d.status==='completed'?'完成':d.status==='failed'?'失败':'等待中';
+        document.getElementById(statusId).textContent = txt;
+        if (d.status==='completed') {
+            resetUI(type,btns,statusId);
+            if (chartIds.charts) document.getElementById(chartIds.charts).style.display = 'grid';
+            if (chartIds.dl) { document.getElementById(chartIds.dl).style.display='block'; document.getElementById(chartIds.dllink).href='/api/task/'+taskId+'/download'; }
+            Object.keys(kpiIds).forEach(k => document.getElementById(type+k).textContent = '已计算');
+            if (chartIds.chartA) document.getElementById(chartIds.chartA).innerHTML = '<div style="padding:80px;color:#4caf50;">✅ 计算完成<br>📊 详细图表请下载结果查看</div>';
+            if (chartIds.chartB) document.getElementById(chartIds.chartB).innerHTML = '<div style="padding:80px;color:#4caf50;">✅ 计算完成<br>📊 详细图表请下载结果查看</div>';
+        } else if (d.status==='failed') {
+            resetUI(type,btns,statusId);
+            alert('计算失败，请检查参数');
+        } else {
+            setTimeout(() => pollTask(type,taskId,btns,progId,statusId,kpiIds,chartIds), 2000);
+        }
+    })
+    .catch(() => setTimeout(() => pollTask(type,taskId,btns,progId,statusId,kpiIds,chartIds), 3000));
+}
+
+function resetUI(type, btns, statusId) {
+    btns.forEach(id => document.getElementById(id).disabled = true);
+    document.getElementById(btns[0]).disabled = false;
+    if (type==='s1') document.getElementById('s1calc').textContent = '计  算';
+    else document.getElementById('s2calc').textContent = '计  算';
+}
+
+function s1UpdateChart() {}
+s1ToggleParams();
 </script>
 {% endblock %}
