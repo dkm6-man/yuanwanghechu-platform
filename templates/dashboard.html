@@ -520,6 +520,19 @@ function pollTask(type, taskId, btns, progId, statusId, kpiIds, chartIds) {
                     if (k['总收益']) document.getElementById('s2kpi4').textContent = k['总收益'];
                 }
             });
+            // 根据策略显示不同图表布局
+            if (type === 's1') {
+                const st = document.querySelector('input[name="s1_strat"]:checked')?.value || 'MILP';
+                if (st === 'MILP') {
+                    // MILP: 全生命周期图占满整个区域
+                    document.getElementById(chartIds.charts).style.gridTemplateColumns = '1fr';
+                    if (chartIds.chartB) document.getElementById(chartIds.chartB).style.display = 'none';
+                } else {
+                    // Hybrid/Transformer: 两列布局，左侧预测对比+月份选择，右侧月度收益
+                    document.getElementById(chartIds.charts).style.gridTemplateColumns = '1fr 1fr';
+                    if (chartIds.chartB) document.getElementById(chartIds.chartB).style.display = '';
+                }
+            }
             // 加载图表
             loadCharts(taskId, type, chartIds);
         } else if (d.status==='failed') {
