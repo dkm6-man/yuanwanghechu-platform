@@ -477,7 +477,7 @@ function pollTask(type, taskId, btns, progId, statusId, kpiIds, chartIds) {
     .then(r=>r.json())
     .then(d=>{
         document.getElementById(progId).style.width = (d.progress||0)+'%';
-        let txt = d.status==='running'?'计算中...'+(d.progress||0)+'%':d.status==='completed'?'完成':d.status==='failed'?'失败':'等待中';
+        let txt = d.status==='running'?'计算中...'+(d.progress||0)+'%':d.status==='completed'?'完成':d.status==='failed'?'失败':d.status==='pending'?(d.error_message||'排队中'):'等待中';
         document.getElementById(statusId).textContent = txt;
         if (d.status==='completed') {
             resetUI(type,btns,statusId);

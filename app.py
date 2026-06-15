@@ -392,6 +392,37 @@ def compute_s3():
     return render_template('compute_s3.html')
 
 # ============================================================
+# 多用户计算任务队列（防崩溃、动态分配资源）
+# ============================================================
+import queue as _queue
+
+_compute_queue = _queue.Queue()          # 待处理任务队列
+_MAX_WORKERS = 1                         # 同时计算任务数（保持1个避免内存/CPU过载，可调为2）
+_active_tasks = {}                        # task_id -> thread
+_queue_order = []                         # 等待队列顺序
+_queue_lock = threading.Lock()
+
+def _worker_loop():
+    """后台工作线程：从队列取任务逐个执行"""
+    while True:
+        try:
+            task_id, task_type, params = _compute_queue.get(timeout=5)
+        except _queue.Empty:
+            continue
+        
+        with _queue_lock:
+            if task_id in _queue_order:
+                _queue_order.remove(task_id)
+        
+        _run_compute_task(task_id, task_type, params)
+        _compute_queue.task_done()
+
+# 启动工作线程
+for _ in range(_MAX_WORKERS):
+    t = threading.Thread(target=_worker_loop, daemon=True)
+    t.start()
+
+# ============================================================
 # API: 执行计算任务
 # ============================================================
 @app.route('/api/compute/start', methods=['POST'])
@@ -414,15 +445,14 @@ def api_start_compute():
     db.session.add(task)
     db.session.commit()
     
-    # 异步执行计算
-    thread = threading.Thread(
-        target=_run_compute_task,
-        args=(task.id, task_type, data.get('params', {})),
-        daemon=True
-    )
-    thread.start()
+    # 加入任务队列（防止并发过载）
+    _compute_queue.put((task.id, task_type, data.get('params', {})))
+    with _queue_lock:
+        _queue_order.append(task.id)
+        task.error_message = f'排队中(前方{len(_queue_order)-1}人)'
+    db.session.commit()
     
-    return jsonify({'task_id': task.id, 'status': 'started'})
+    return jsonify({'task_id': task.id, 'status': 'queued', 'queue_position': len(_queue_order)})
 
 def _run_compute_task(task_id, task_type, params):
     """后台执行计算任务"""
@@ -432,6 +462,8 @@ def _run_compute_task(task_id, task_type, params):
             return
         
         task.status = 'running'
+        task.error_message = '计算中...'
+        task.progress = 0
         db.session.commit()
         
         try:
@@ -720,7 +752,12 @@ def api_task_status(task_id):
     if not task or task.user_id != current_user.id:
         return jsonify({'error': '任务不存在'}), 404
     
-    return jsonify(task.to_dict())
+    result = task.to_dict()
+    # 加入排队信息
+    with _queue_lock:
+        if task.id in _queue_order:
+            result['queue_position'] = _queue_order.index(task.id) + 1
+    return jsonify(result)
 
 # ============================================================
 # API: 获取结果KPI
