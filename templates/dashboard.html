@@ -419,7 +419,7 @@ function runS1() {
         start_hour: +document.getElementById('s1_start_hr').value||0,
         pred_len: +document.getElementById('s1_pred_len').value||1,
     };
-    doCompute('s1', params, ['s1calc','s1pause','s1stop'], 's1prog', 's1status',
+    doCompute('s1', params, ['s1calc','s1pause','s1resume','s1stop'], 's1prog', 's1status',
         {kpi1:'first_year_profit',kpi2:'payback',kpi3:'lifecycle_profit',kpi4:'life_years'},
         {chartA:'s1chartA',chartB:'s1chartB',charts:'s1charts',dl:'s1dl',dllink:'s1dllink'});
 }
@@ -445,7 +445,7 @@ function runS2() {
         sim_hours: +document.getElementById('s2_sim_hrs').value||8760,
         start_hour: +document.getElementById('s2_start_hr').value||0,
     };
-    doCompute('s2', params, ['s2calc','s2pause','s2stop'], 's2prog', 's2status',
+    doCompute('s2', params, ['s2calc','s2pause','s2resume','s2stop'], 's2prog', 's2status',
         {kpi1:'electricity_profit',kpi2:'capacity_saving',kpi3:'purchase_saving',kpi4:'first_year_profit',kpi5:'payback'},
         {chartA:'s2chartA',chartB:'s2chartB',charts:'s2charts',dl:'s2dl',dllink:'s2dllink'});
 }
@@ -546,10 +546,11 @@ function pollTask(type, taskId, btns, progId, statusId, kpiIds, chartIds) {
 }
 
 function resetUI(type, btns, statusId) {
-    btns.forEach(id => document.getElementById(id).disabled = true);
-    document.getElementById(btns[0]).disabled = false;
-    if (type==='s1') document.getElementById('s1calc').textContent = '计  算';
-    else document.getElementById('s2calc').textContent = '计  算';
+    // 禁用所有控制按钮，恢复计算按钮
+    if (btns[0]) { document.getElementById(btns[0]).disabled = false; document.getElementById(btns[0]).textContent = (type==='s1'?'计  算':'计  算'); }
+    if (btns[1]) document.getElementById(btns[1]).disabled = true;
+    if (btns[2]) document.getElementById(btns[2]).disabled = true;
+    if (btns[3]) document.getElementById(btns[3]).disabled = true;
 }
 
 function s1UpdateChart() {}
@@ -707,7 +708,7 @@ function controlTask(action) {
         const active = tasks.find(t => t.status === 'running' || t.status === 'pending');
         if (!active) return;
         const type = active.task_type === '荷-储协同' ? 's1' : 's2';
-        const btns = type === 's1' ? ['s1calc','s1pause','s1stop'] : ['s2calc','s2pause','s2stop'];
+        const btns = type === 's1' ? ['s1calc','s1pause','s1resume','s1stop'] : ['s2calc','s2pause','s2resume','s2stop'];
         const progId = type === 's1' ? 's1prog' : 's2prog';
         const statusId = type === 's1' ? 's1status' : 's2status';
         const kpiIds = type === 's1' ? {kpi1:'first_year_profit',kpi2:'payback',kpi3:'lifecycle_profit',kpi4:'life_years'}
