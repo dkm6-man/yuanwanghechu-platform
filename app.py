@@ -33,6 +33,16 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = '请先登录后再访问此页面。'
 
+# 确保数据库和默认管理员就绪（Railway部署时自动执行）
+with app.app_context():
+    db.create_all()
+    admin = User.query.filter_by(is_admin=True).first()
+    if not admin:
+        admin = User(username='admin', phone='13001080740', is_admin=True)
+        admin.set_password('0813@Ming')
+        db.session.add(admin)
+        db.session.commit()
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
