@@ -32,6 +32,17 @@ with open(_CURRENT_DIR.parent / '0612-协同1.0调试.py', 'r', encoding='utf-8'
 _engine_source = _engine_source.replace("if __name__==\"__main__\":", "if False:")
 exec(_engine_source, _ENGINE_GLOBALS)
 
+# 计算前重新加载引擎（确保使用最新代码）
+def _reload_engine():
+    """重新读取并执行原始代码，确保计算使用最新修改"""
+    global _ENGINE_GLOBALS
+    with open(_CURRENT_DIR.parent / '0612-协同1.0调试.py', 'r', encoding='utf-8') as _f:
+        _src = _f.read()
+    _src = _src.replace("if __name__==\"__main__\":", "if False:")
+    _new_globals = {}
+    exec(_src, _new_globals)
+    _ENGINE_GLOBALS = _new_globals
+
 # ============================================================
 # Flask App 初始化
 # ============================================================
@@ -449,6 +460,7 @@ def _run_compute_task(task_id, task_type, params):
 def _run_s1_compute(task, params):
     """荷-储协同计算 — 使用原始计算引擎"""
     try:
+        _reload_engine()  # 每次计算前重新加载最新代码
         import numpy as np
         import pandas as pd
         import datetime as _dt
@@ -590,6 +602,7 @@ def _run_s1_compute(task, params):
 def _run_s2_compute(task, params):
     """电-荷-储协同计算 — 使用原始Step2Strat引擎"""
     try:
+        _reload_engine()  # 每次计算前重新加载最新代码
         import numpy as np
         import pandas as pd
         import datetime as _dt
