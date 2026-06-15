@@ -29,7 +29,7 @@
 
     <!-- 任务管理 -->
     <div class="admin-section" style="grid-column: 1 / -1;">
-        <h3>📊 计算任务列表</h3>
+        <h3>📊 计算任务列表 <button onclick="location.reload()" style="margin-left:10px;font-size:0.8rem;cursor:pointer;">刷新</button></h3>
         <table class="admin-table">
             <thead>
                 <tr>
@@ -40,6 +40,7 @@
                     <th>进度</th>
                     <th>创建时间</th>
                     <th>完成时间</th>
+                    <th>操作</th>
                 </tr>
             </thead>
             <tbody>
@@ -54,9 +55,16 @@
                     <td>{{ task.progress }}%</td>
                     <td>{{ task.created_at.strftime('%m-%d %H:%M') if task.created_at else '-' }}</td>
                     <td>{{ task.completed_at.strftime('%m-%d %H:%M') if task.completed_at else '-' }}</td>
+                    <td>
+                        {% if task.status in ('running', 'pending') %}
+                        <button onclick="adminKill({{ task.id }})" class="btn-sm" style="background:#c62828;color:#fff;">终止</button>
+                        {% else %}
+                        --
+                        {% endif %}
+                    </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="7">暂无计算任务</td></tr>
+                <tr><td colspan="8">暂无计算任务</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -109,6 +117,21 @@ function toggleUser(userId) {
                 location.reload();
             }
         });
+}
+
+function adminKill(taskId) {
+    if (!confirm('确定要强制终止任务 #' + taskId + ' 吗？')) return;
+    fetch('/api/task/' + taskId + '/kill', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
+                alert('任务已终止');
+                location.reload();
+            } else {
+                alert('终止失败: ' + (d.error || '未知错误'));
+            }
+        })
+        .catch(() => alert('请求失败'));
 }
 </script>
 {% endblock %}
