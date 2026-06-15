@@ -398,7 +398,7 @@ import queue as _queue
 
 _compute_queue = _queue.Queue()          # 待处理任务队列
 _MAX_WORKERS = 2                         # 同时计算任务数（保持1个避免内存/CPU过载，可调为2）
-_active_tasks = {}                        # task_id -> thread
+_active_tasks = {}                        # task_id -> {'thread', 'se', 'pe'}
 _queue_order = []                         # 等待队列顺序
 _queue_lock = threading.Lock()
 
@@ -466,6 +466,12 @@ def _run_compute_task(task_id, task_type, params):
         task.progress = 0
         db.session.commit()
         
+        # 创建控制事件并存储
+        se = threading.Event()  # 停止
+        pe = threading.Event()  # 暂停
+        with _queue_lock:
+            _active_tasks[task_id] = {'se': se, 'pe': pe}
+        
         try:
             # 根据任务类型执行不同计算
             if task_type == 's1':
@@ -487,7 +493,52 @@ def _run_compute_task(task_id, task_type, params):
             task.error_message = str(e)
             traceback.print_exc()
         
+        with _queue_lock:
+            _active_tasks.pop(task_id, None)
         db.session.commit()
+
+# ============================================================
+# API: 暂停/继续/结束任务
+# ============================================================
+@app.route('/api/task/<int:task_id>/pause', methods=['POST'])
+@login_required
+def api_task_pause(task_id):
+    with _queue_lock:
+        info = _active_tasks.get(task_id)
+    if not info:
+        return jsonify({'error': '任务未在运行'}), 404
+    info['pe'].set()
+    return jsonify({'success': True})
+
+@app.route('/api/task/<int:task_id>/resume', methods=['POST'])
+@login_required
+def api_task_resume(task_id):
+    with _queue_lock:
+        info = _active_tasks.get(task_id)
+    if not info:
+        return jsonify({'error': '任务未在运行'}), 404
+    info['pe'].clear()
+    return jsonify({'success': True})
+
+@app.route('/api/task/<int:task_id>/stop', methods=['POST'])
+@login_required
+def api_task_stop(task_id):
+    with _queue_lock:
+        info = _active_tasks.get(task_id)
+    if not info:
+        # 可能在排队中，从队列移除
+        if task_id in _queue_order:
+            _queue_order.remove(task_id)
+            task = ComputeTask.query.get(task_id)
+            if task:
+                task.status = 'failed'
+                task.error_message = '用户终止'
+            db.session.commit()
+            return jsonify({'success': True, 'removed': 'queue'})
+        return jsonify({'error': '任务未找到'}), 404
+    info['se'].set()
+    info['pe'].clear()  # 取消暂停状态
+    return jsonify({'success': True})
 
 def _run_s1_compute(task, params):
     """荷-储协同计算 — 使用原始计算引擎"""
@@ -546,11 +597,10 @@ def _run_s1_compute(task, params):
         db.session.commit()
         
         if strategy == 'MILP':
-            # MILP理想最优策略
             strat = IdealStrat(p)
             df = strat.run(load, prices, 
                           lambda cur, tot, msg: setattr(task, 'progress', min(99, 10 + int(cur/tot*89))) or db.session.commit(), 
-                          threading.Event(), threading.Event())
+                          se, pe)
         elif strategy in ('Hybrid', 'Transformer'):
             # AI预测策略
             sh = int(params.get('sim_hours', 4380))
@@ -572,7 +622,7 @@ def _run_s1_compute(task, params):
                                        name=f"{strategy}Online", abs_start_hour=s0)
             df = strat.run(ls, ps,
                           lambda cur, tot, msg: setattr(task, 'progress', min(99, 10 + int(cur/tot*89))) or db.session.commit(),
-                          threading.Event(), threading.Event())
+                          se, pe)
         else:
             raise ValueError(f"未知策略: {strategy}")
         
@@ -703,7 +753,7 @@ def _run_s2_compute(task, params):
         
         df = strat.run(ls, ps,
                       lambda cur, tot, msg: setattr(task, 'progress', min(99, 10 + int(cur/tot*89))) or db.session.commit(),
-                      threading.Event(), threading.Event())
+                      se, pe)
         
         if df is None:
             raise ValueError("计算被终止")

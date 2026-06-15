@@ -174,9 +174,9 @@
     <div class="gui-ctrl-row">
         <div class="gui-ctrl-btns">
             <button class="gui-btn btn-go" id="s1calc" onclick="runS1()">计  算</button>
-            <button class="gui-btn btn-pause" id="s1pause" disabled>暂停</button>
-            <button class="gui-btn btn-resume" id="s1resume" disabled>继续</button>
-            <button class="gui-btn btn-stop" id="s1stop" disabled>结束</button>
+            <button class="gui-btn btn-pause" id="s1pause" disabled onclick="controlTask('pause')">暂停</button>
+            <button class="gui-btn btn-resume" id="s1resume" disabled onclick="controlTask('resume')">继续</button>
+            <button class="gui-btn btn-stop" id="s1stop" disabled onclick="controlTask('stop')">结束</button>
         </div>
         <div class="gui-progress-wrap">
             <div class="gui-progress"><div class="gui-progress-fill" id="s1prog"></div></div>
@@ -280,9 +280,9 @@
     <div class="gui-ctrl-row">
         <div class="gui-ctrl-btns">
             <button class="gui-btn btn-go" id="s2calc" onclick="runS2()">计  算</button>
-            <button class="gui-btn btn-pause" id="s2pause" disabled>暂停</button>
-            <button class="gui-btn btn-resume" id="s2resume" disabled>继续</button>
-            <button class="gui-btn btn-stop" id="s2stop" disabled>结束</button>
+            <button class="gui-btn btn-pause" id="s2pause" disabled onclick="controlTask('pause')">暂停</button>
+            <button class="gui-btn btn-resume" id="s2resume" disabled onclick="controlTask('resume')">继续</button>
+            <button class="gui-btn btn-stop" id="s2stop" disabled onclick="controlTask('stop')">结束</button>
         </div>
         <div class="gui-progress-wrap">
             <div class="gui-progress"><div class="gui-progress-fill" id="s2prog"></div></div>
@@ -449,10 +449,16 @@ function runS2() {
 }
 
 // ===== 通用计算函数 =====
+let currentTaskId = null;
+let currentTaskType = null;
+
 function doCompute(type, params, btns, progId, statusId, kpiIds, chartIds) {
-    btns.forEach((id,i) => { document.getElementById(id).disabled = i===0; });
-    if (btns[0]==='s1calc') document.getElementById('s1calc').textContent = '计算中...';
-    else document.getElementById('s2calc').textContent = '计算中...';
+    currentTaskType = type;
+    document.getElementById(btns[0]).disabled = true;
+    document.getElementById(btns[0]).textContent = '计算中...';
+    document.getElementById(btns[1]).disabled = false;
+    document.getElementById(btns[2]).disabled = true;
+    document.getElementById(btns[3]).disabled = false;
     document.getElementById(progId).style.width = '2%';
     document.getElementById(statusId).textContent = '启动中...';
     Object.keys(kpiIds).forEach(k => document.getElementById(type+k).textContent = '--');
@@ -467,6 +473,7 @@ function doCompute(type, params, btns, progId, statusId, kpiIds, chartIds) {
     .then(r=>r.json())
     .then(d=>{
         if (d.error) { resetUI(type,btns,statusId); alert(d.error); return; }
+        currentTaskId = d.task_id;
         pollTask(type, d.task_id, btns, progId, statusId, kpiIds, chartIds);
     })
     .catch(e => { resetUI(type,btns,statusId); alert('请求失败: '+e); });
@@ -640,6 +647,28 @@ function showModal(html) {
 function closeModal() {
     const m = document.getElementById('modalOverlay');
     if (m) m.remove();
+}
+
+// ===== 暂停/继续/结束控制 =====
+function controlTask(action) {
+    if (!currentTaskId) return;
+    fetch('/api/task/'+currentTaskId+'/'+action, {method:'POST'})
+    .then(r=>r.json())
+    .then(d => {
+        const type = currentTaskType || 's1';
+        if (action === 'pause') {
+            document.getElementById(type+'pause').disabled = true;
+            document.getElementById(type+'resume').disabled = false;
+            document.getElementById(type+'status').textContent = '已暂停';
+        } else if (action === 'resume') {
+            document.getElementById(type+'pause').disabled = false;
+            document.getElementById(type+'resume').disabled = true;
+            document.getElementById(type+'status').textContent = '继续计算...';
+        } else if (action === 'stop') {
+            const btns = [type+'calc', type+'pause', type+'stop'];
+            resetUI(type, btns, type+'status');
+        }
+    });
 }
 
 // ===== 页面加载时自动恢复正在运行的任务 =====
