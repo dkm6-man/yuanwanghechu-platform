@@ -723,6 +723,32 @@ def api_task_status(task_id):
     return jsonify(task.to_dict())
 
 # ============================================================
+# API: 获取结果KPI
+# ============================================================
+@app.route('/api/task/<int:task_id>/kpi')
+@login_required
+def api_task_kpi(task_id):
+    task = ComputeTask.query.get(task_id)
+    if not task or task.user_id != current_user.id:
+        return jsonify({'error': '任务不存在'}), 404
+    if task.status != 'completed' or not task.result_file:
+        return jsonify({'error': '结果不可用'}), 400
+    result_dir = Path(task.result_file)
+    summary_file = result_dir / '经济指标.txt'
+    if not summary_file.exists():
+        return jsonify({'error': '指标文件不存在'}), 404
+    
+    kpi = {}
+    with open(summary_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            for key in ['首年综合盈利','回收期','生命周期净利润','电池循环寿命','电价收益','容量节省','储能套利','需量节省','购电节省','总收益']:
+                if key in line:
+                    val = line.split(':',1)[-1].strip().replace('元','').replace('年','').strip()
+                    kpi[key] = val
+                    break
+    return jsonify({'kpi': kpi})
+
+# ============================================================
 # API: 展示结果图表
 # ============================================================
 @app.route('/api/task/<int:task_id>/charts')

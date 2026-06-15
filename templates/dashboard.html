@@ -483,7 +483,19 @@ function pollTask(type, taskId, btns, progId, statusId, kpiIds, chartIds) {
             resetUI(type,btns,statusId);
             if (chartIds.charts) document.getElementById(chartIds.charts).style.display = 'grid';
             if (chartIds.dl) { document.getElementById(chartIds.dl).style.display='block'; document.getElementById(chartIds.dllink).href='/api/task/'+taskId+'/download'; }
-            Object.keys(kpiIds).forEach(k => document.getElementById(type+k).textContent = '✓');
+            Object.keys(kpiIds).forEach(k => document.getElementById(type+k).textContent = '...');
+            fetch('/api/task/'+taskId+'/kpi').then(r=>r.json()).then(kd => {
+                if (kd.kpi) { const k = kd.kpi;
+                    if (k['首年综合盈利']) document.getElementById('s1kpi1').textContent = k['首年综合盈利'];
+                    if (k['回收期']) { document.getElementById('s1kpi2').textContent = k['回收期']; document.getElementById('s2kpi5').textContent = k['回收期']; }
+                    if (k['生命周期净利润']) document.getElementById('s1kpi3').textContent = k['生命周期净利润'];
+                    if (k['电池循环寿命']) document.getElementById('s1kpi4').textContent = k['电池循环寿命'];
+                    if (k['储能套利']) document.getElementById('s2kpi1').textContent = k['储能套利'];
+                    if (k['需量节省']) document.getElementById('s2kpi2').textContent = k['需量节省'];
+                    if (k['购电节省']) document.getElementById('s2kpi3').textContent = k['购电节省'];
+                    if (k['总收益']) document.getElementById('s2kpi4').textContent = k['总收益'];
+                }
+            });
             // 加载图表
             loadCharts(taskId, type, chartIds);
         } else if (d.status==='failed') {
