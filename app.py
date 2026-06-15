@@ -1002,6 +1002,7 @@ if __name__ == '__main__':
     print("=" * 60)
     print("源网荷储一体化计算平台 Web版")
     print(f"访问地址: http://127.0.0.1:5000")
-    print(f"管理员账号: admin / admin123")
+    print(f"管理员账号: 13001080740 / 0813@Ming")
     print("=" * 60)
-    app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)
+    from waitress import serve
+    serve(app, host='0.0.0.0', port=5000, threads=8)
