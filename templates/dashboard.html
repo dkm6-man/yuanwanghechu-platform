@@ -177,6 +177,7 @@
             <button class="gui-btn btn-pause" id="s1pause" disabled onclick="controlTask('pause')">暂停</button>
             <button class="gui-btn btn-resume" id="s1resume" disabled onclick="controlTask('resume')">继续</button>
             <button class="gui-btn btn-stop" id="s1stop" disabled onclick="controlTask('stop')">结束</button>
+            <button class="gui-btn btn-stop" id="s1force" style="display:none;background:#c62828;color:#fff;" onclick="controlTask('stop')">强制退出</button>
         </div>
         <div class="gui-progress-wrap">
             <div class="gui-progress"><div class="gui-progress-fill" id="s1prog"></div></div>
@@ -283,6 +284,7 @@
             <button class="gui-btn btn-pause" id="s2pause" disabled onclick="controlTask('pause')">暂停</button>
             <button class="gui-btn btn-resume" id="s2resume" disabled onclick="controlTask('resume')">继续</button>
             <button class="gui-btn btn-stop" id="s2stop" disabled onclick="controlTask('stop')">结束</button>
+            <button class="gui-btn btn-stop" id="s2force" style="display:none;background:#c62828;color:#fff;" onclick="controlTask('kill')">强制退出</button>
         </div>
         <div class="gui-progress-wrap">
             <div class="gui-progress"><div class="gui-progress-fill" id="s2prog"></div></div>
@@ -480,12 +482,27 @@ function doCompute(type, params, btns, progId, statusId, kpiIds, chartIds) {
 }
 
 function pollTask(type, taskId, btns, progId, statusId, kpiIds, chartIds) {
+    if (!taskId) return;
     fetch('/api/task/'+taskId+'/status')
     .then(r=>r.json())
     .then(d=>{
-        document.getElementById(progId).style.width = (d.progress||0)+'%';
-        let txt = d.status==='running'?'计算中...'+(d.progress||0)+'%':d.status==='completed'?'完成':d.status==='failed'?'失败':d.status==='pending'?(d.error_message||'排队中'):'等待中';
+        const pct = d.progress||0;
+        document.getElementById(progId).style.width = pct+'%';
+        let txt = d.status==='running'?'计算中...'+pct+'%':d.status==='completed'?'完成':d.status==='failed'?'失败':d.status==='pending'?(d.error_message||'排队中'):'等待中';
         document.getElementById(statusId).textContent = txt;
+        
+        // 超时检测：进度卡住超过45秒 → 显示强制退出
+        if (d.status === 'running' && pct > 0 && pct < 100) {
+            const now = Date.now();
+            if (!window._lastProgress) window._lastProgress = {pct:0, time:0};
+            if (pct !== window._lastProgress.pct) {
+                window._lastProgress = {pct: pct, time: now};
+            } else if (now - window._lastProgress.time > 45000) {
+                const fbtn = document.getElementById(type+'force');
+                if (fbtn) fbtn.style.display = 'inline-block';
+            }
+        }
+        
         if (d.status==='completed') {
             resetUI(type,btns,statusId);
             if (chartIds.charts) document.getElementById(chartIds.charts).style.display = 'grid';

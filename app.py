@@ -520,25 +520,26 @@ def api_task_resume(task_id):
     info['pe'].clear()
     return jsonify({'success': True})
 
+@app.route('/api/task/<int:task_id>/kill', methods=['POST'])
+@login_required
+def api_task_kill(task_id):
+    """强制杀死任务"""
+    with _queue_lock:
+        info = _active_tasks.pop(task_id, None)
+    if info:
+        info['se'].set()
+        info['pe'].clear()
+    task = ComputeTask.query.get(task_id)
+    if task:
+        task.status = 'failed'
+        task.error_message = '用户强制终止'
+    db.session.commit()
+    return jsonify({'success': True})
+
 @app.route('/api/task/<int:task_id>/stop', methods=['POST'])
 @login_required
 def api_task_stop(task_id):
-    with _queue_lock:
-        info = _active_tasks.get(task_id)
-    if not info:
-        # 可能在排队中，从队列移除
-        if task_id in _queue_order:
-            _queue_order.remove(task_id)
-            task = ComputeTask.query.get(task_id)
-            if task:
-                task.status = 'failed'
-                task.error_message = '用户终止'
-            db.session.commit()
-            return jsonify({'success': True, 'removed': 'queue'})
-        return jsonify({'error': '任务未找到'}), 404
-    info['se'].set()
-    info['pe'].clear()  # 取消暂停状态
-    return jsonify({'success': True})
+    return api_task_kill(task_id)
 
 def _run_s1_compute(task, params):
     """荷-储协同计算 — 使用原始计算引擎"""
