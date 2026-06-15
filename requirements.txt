@@ -7,9 +7,10 @@ numpy>=1.21.0
 pandas>=1.3.0
 matplotlib>=3.4.0
 openpyxl>=3.0.0
-# 以下为可选依赖（用于完整计算功能）
+# 可选：AI预测策略需本地安装tensorflow/scikit-learn/PuLP
+# Railway云部署仅支持MILP策略
 # tensorflow>=2.10.0
 # scikit-learn>=1.0.0
-# PuLP>=2.7.0
-# requests>=2.25.0
+PuLP>=2.7.0
+requests>=2.25.0
 gunicorn>=21.2.0
