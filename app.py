@@ -562,134 +562,94 @@ def _run_s1_compute(task, params):
         raise e
 
 def _run_s2_compute(task, params):
-    """执行电-荷-储协同计算"""
+    """电-荷-储协同计算 — 使用原始Step2Strat引擎"""
     try:
         import numpy as np
         import pandas as pd
-        from pathlib import Path
-        
-        # 获取用户信息
-        user = User.query.get(task.user_id)
-        
-        battery_cap = float(params.get('battery_capacity_mw', 3))
-        pv_cap = float(params.get('pv_capacity_mw', 45))
-        wind_cap = float(params.get('wind_capacity_mw', 10))
-        annual_om = float(params.get('annual_om_cost', 42000))
-        
-        hours = 8760
-        t = np.arange(hours)
-        
-        # 负荷
-        load = 2000 * (0.3 * np.sin(2*np.pi*t/24) + 0.7) * (0.1 * np.sin(2*np.pi*t/168) + 0.9) * (0.2 * np.sin(2*np.pi*t/8760) + 0.8)
-        load = np.abs(load + np.random.normal(0, 200, hours))
-        
-        # 光伏出力（白天）
-        pv = np.zeros(hours)
-        for h in range(hours):
-            hour = h % 24
-            if 6 <= hour <= 18:
-                pv[h] = pv_cap * 1000 * max(0, np.sin(np.pi * (hour - 6) / 12)) * (0.7 + 0.3 * np.random.random())
-        
-        # 风电出力
-        wind = np.zeros(hours)
-        for h in range(hours):
-            wind[h] = wind_cap * 1000 * abs(0.3 + 0.2 * np.sin(2*np.pi*h/48) + 0.1 * np.random.randn())
-        
-        green = pv + wind
-        net_load = np.maximum(0, load - green)
-        
-        # 电价
-        prices = np.ones(hours) * 0.6
-        for h in range(hours):
-            hour = h % 24
-            if 9 <= hour <= 11 or 18 <= hour <= 20:
-                prices[h] = 0.85
-            elif 0 <= hour <= 7:
-                prices[h] = 0.13
-        
-        # 储能策略
-        cap_kw = battery_cap * 1000
-        soc = np.zeros(hours)
-        power = np.zeros(hours)
-        soc_current = cap_kw * 0.1
-        
-        for day in range(hours // 24):
-            start = day * 24
-            end = min(start + 24, hours)
-            day_prices = prices[start:end]
-            day_net = net_load[start:end]
-            
-            low_hours = np.argsort(day_prices)[:4]
-            high_hours = np.argsort(day_prices)[-4:]
-            
-            for h in range(end - start):
-                idx = start + h
-                if h in low_hours:
-                    chg = min(cap_kw * 0.5, (cap_kw * 0.95 - soc_current) / 0.95)
-                    power[idx] = chg
-                    soc_current += chg * 0.95
-                elif h in high_hours:
-                    dis = min(cap_kw * 0.5, (soc_current - cap_kw * 0.1) * 0.95)
-                    power[idx] = -dis
-                    soc_current -= dis / 0.95
-                else:
-                    power[idx] = 0
-                
-                soc[idx] = soc_current / cap_kw
-        
-        # 经济指标
-        elec_profit = sum(-power[i] * prices[i] for i in range(hours))
-        grid_purchase_base = sum(load[i] * 0.6 for i in range(hours))
-        grid_purchase_actual = sum(max(0, net_load[i] + power[i]) * prices[i] for i in range(hours))
-        purchase_saving = grid_purchase_base - grid_purchase_actual
-        green_consumption = sum(min(green[i], load[i]) for i in range(hours))
-        
-        cap_saving = 0
-        for m in range(12):
-            m_start = m * 730
-            m_end = min((m+1) * 730, hours)
-            orig_max = max(net_load[m_start:m_end])
-            new_max = max(net_load[m_start:m_end] + power[m_start:m_end])
-            if new_max < orig_max:
-                cap_saving += (orig_max - new_max) * 30
-        
-        investment = 700 * cap_kw
-        first_year_profit = elec_profit + cap_saving + purchase_saving * 0.3 - annual_om
-        payback = investment / first_year_profit if first_year_profit > 0 else float('inf')
-        
-        # 保存结果到用户专属目录
         import datetime as _dt
-        result_dir = Path(r'C:\Users\dukm6\Desktop\power\users') / user.phone / f's2_{task.id}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        
+        U = _ENGINE_GLOBALS['U']
+        C = _ENGINE_GLOBALS['C']
+        Step2Strat = _ENGINE_GLOBALS['Step2Strat']
+        
+        user = User.query.get(task.user_id)
+        user_dir = USER_DATA_ROOT / user.phone if user else USER_DATA_ROOT / 'default'
+        user_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 读取参数
+        p = C.DP.copy()
+        for k in ['battery_capacity_mw','unit_investment','annual_om_cost','capacity_price',
+                  'charge_efficiency','discharge_efficiency','dod','cycle_life','max_c_rate']:
+            if k in params:
+                p[k] = float(params[k])
+        for k in ['pv_capacity_mw','wind_capacity_mw','grid_avg_price']:
+            if k in params:
+                p[k] = float(params[k])
+        p['soc_min'] = max(p.get('soc_min', 0.1), 0.05)
+        p['soc_max'] = min(0.95, p.get('soc_min', 0.1) + p.get('dod', 0.85))
+        
+        # 加载负荷
+        load_data = None
+        load_files = sorted(user_dir.glob('load_*.xlsx'), key=lambda x: x.stat().st_mtime, reverse=True)
+        if load_files:
+            df = pd.read_excel(load_files[0])
+            if 'Load' in df.columns:
+                load_data = df['Load'].values
+            elif len(df.columns) >= 2:
+                load_data = df.iloc[:, 1].values
+        
+        if load_data is None:
+            load_df = U.gen_load()
+            load = load_df['Load'].values[:8760]
+        else:
+            load = np.abs(load_data)[:8760]
+        
+        prices = U.build_price(C.PG)[:8760]
+        
+        # 天气和市场数据（可选）
+        wdf = None
+        weather_files = sorted(user_dir.glob('weather_*.xlsx'), key=lambda x: x.stat().st_mtime, reverse=True)
+        if weather_files:
+            wdf = pd.read_excel(weather_files[0])
+        
+        mdf = None
+        price_files = sorted(user_dir.glob('price_*.xlsx'), key=lambda x: x.stat().st_mtime, reverse=True)
+        if price_files:
+            mdf = pd.read_excel(price_files[0])
+        
+        hh = int(params.get('train_hours', 336))
+        fi = int(params.get('ft_interval', 2))
+        sh = int(params.get('sim_hours', 8760))
+        s0 = int(params.get('start_hour', 0))
+        
+        strat = Step2Strat(p, wdf, mdf, hh, fi)
+        ls = load[s0:s0+sh]
+        ps = prices[s0:s0+sh]
+        
+        task.progress = 10
+        db.session.commit()
+        
+        df = strat.run(ls, ps,
+                      lambda cur, tot, msg: setattr(task, 'progress', min(99, 10 + int(cur/tot*89))) or db.session.commit(),
+                      threading.Event(), threading.Event())
+        
+        if df is None:
+            raise ValueError("计算被终止")
+        
+        task.progress = 95
+        db.session.commit()
+        
+        # 保存结果
+        result_dir = user_dir / f's2_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
         result_dir.mkdir(parents=True, exist_ok=True)
+        df.to_csv(result_dir / '全年逐时结果.csv', index=False, encoding='utf-8-sig')
         
-        df = pd.DataFrame({
-            'Hour': range(hours),
-            'Load_Original': load,
-            'PV_Output': pv,
-            'Wind_Output': wind,
-            'Green_Supply': green,
-            'Net_Load': net_load,
-            'Load_New': net_load + power,
-            'Power': power,
-            'SOC': soc,
-            'Price': prices,
-            'Electricity_Profit': -power * prices,
-            'Grid_Purchase': np.maximum(0, net_load + power),
-        })
-        
-        df.to_csv(result_dir / 'result.csv', index=False, encoding='utf-8-sig')
-        
-        with open(result_dir / 'summary.txt', 'w', encoding='utf-8') as f:
-            f.write(f"=== 电-荷-储协同计算结果 ===\n")
-            f.write(f"储能套利: {elec_profit:,.2f} 元\n")
-            f.write(f"需量节省: {cap_saving:,.2f} 元\n")
-            f.write(f"购电节省: {purchase_saving:,.2f} 元\n")
-            f.write(f"首年盈利: {first_year_profit:,.2f} 元\n")
-            f.write(f"回收期: {payback:.2f} 年\n")
-            f.write(f"绿电消纳量: {green_consumption/1000:.1f} MWh\n")
+        with open(result_dir / '经济指标.txt', 'w', encoding='utf-8') as fw:
+            fw.write(f"=== 电-荷-储协同计算结果 ===\n")
+            fw.write(f"负荷预测 R²: {df.attrs.get('Load_R2', 0):.4f}\n")
+            fw.write(f"电价预测 R²: {df.attrs.get('Price_R2', 0):.4f}\n")
         
         return str(result_dir)
-        
     except Exception as e:
         traceback.print_exc()
         raise e
