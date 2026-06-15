@@ -511,12 +511,18 @@ function loadCharts(taskId, type, chartIds) {
     .then(r=>r.json())
     .then(data => {
         if (!data.charts || !data.charts.length) return;
-        let html = '';
-        data.charts.forEach((c, i) => {
-            html += '<div style="margin:4px;"><img src="'+c.url+'" style="max-width:100%;border:1px solid #ddd;border-radius:4px;" /></div>';
+        let a = '', b = '';
+        data.charts.forEach(c => {
+            const img = '<div style="margin:4px;"><img src="'+c.url+'" style="max-width:100%;border:1px solid #ddd;border-radius:4px;" /></div>';
+            // 生命周期图 / 散点图放chartA，月度收益/预测对比放chartB
+            if (c.name.includes('生命周期') || c.name.includes('散点') || c.name.includes('预测对比')) {
+                a += img;
+            } else {
+                b += img;
+            }
         });
-        if (chartIds.chartA) document.getElementById(chartIds.chartA).innerHTML = html || '<div style="padding:40px;color:#999;">无图表</div>';
-        if (chartIds.chartB) document.getElementById(chartIds.chartB).innerHTML = '';
+        if (chartIds.chartA) document.getElementById(chartIds.chartA).innerHTML = a || '<div style="padding:40px;color:#999;">无图表</div>';
+        if (chartIds.chartB) document.getElementById(chartIds.chartB).innerHTML = b || '<div style="padding:40px;color:#999;">无图表</div>';
     })
     .catch(() => {});
 }

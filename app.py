@@ -569,7 +569,7 @@ def _run_s1_compute(task, params):
             if 'life_years' in ec:
                 fw.write(f"电池循环寿命: {ec['life_years']:.2f} 年\n")
         
-        # 生成图表（使用原始Plt绘图类）
+        # 生成图表（严格对照原始代码：MILP只显示生命周期，其他显示预测+月度收益）
         Plt = _ENGINE_GLOBALS['Plt']
         cp = p['capacity_price']
         cap_kw = p['battery_capacity_mw'] * 1000
@@ -580,19 +580,20 @@ def _run_s1_compute(task, params):
             Plt.monthly_bar(df, result_dir, cp)
             Plt.peak_cmp(df, result_dir)
             if strategy == 'MILP':
+                # MILP只显示全生命周期图
                 Plt.lifecycle(ec, result_dir)
             else:
+                # Hybrid/Transformer显示预测对比+月度收益
                 Plt.scatter(df, result_dir)
                 for m, d in [(1,15), (7,15)]:
-                    try: Plt.fcast_vs_real(df, m, d, result_dir, 
-                        df.attrs.get('Load_R2'), df.attrs.get('Load_RMSE'), df.attrs.get('Load_MAPE'))
-                    except: pass
-            if strategy != 'MILP':
-                for m, d in [(1,15), (7,15)]:
-                    try: Plt.typical(df, m, d, result_dir, cap_kw, smin, smax)
+                    try:
+                        if 'Forecast_Load' in df.columns:
+                            Plt.fcast_vs_real(df, m, d, result_dir, 
+                                df.attrs.get('Load_R2'), df.attrs.get('Load_RMSE'), df.attrs.get('Load_MAPE'))
+                        Plt.typical(df, m, d, result_dir, cap_kw, smin, smax)
                     except: pass
         except Exception as _e:
-            print(f"Chart generation warning: {_e}")
+            print(f"Chart warning: {_e}")
         
         return str(result_dir)
     except Exception as e:
