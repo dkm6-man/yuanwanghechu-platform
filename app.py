@@ -541,11 +541,12 @@ def _run_s1_compute(task, params):
         # 经济评估
         ec = econ(df, p)
         
-        # 保存结果
+        # 保存结果 + 生成所有图表
         result_dir = user_dir / f's1_{strategy}_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
         result_dir.mkdir(parents=True, exist_ok=True)
         df.to_csv(result_dir / '全年逐时结果.csv', index=False, encoding='utf-8-sig')
         
+        # 经济指标
         with open(result_dir / '经济指标.txt', 'w', encoding='utf-8') as fw:
             fw.write(f"策略: {strategy}\n")
             fw.write(f"首年综合盈利: {ec['first_year_profit']:,.2f} 元\n")
@@ -555,6 +556,31 @@ def _run_s1_compute(task, params):
             fw.write(f"生命周期净利润: {ec.get('lifecycle_profit', 0):,.2f} 元\n")
             if 'life_years' in ec:
                 fw.write(f"电池循环寿命: {ec['life_years']:.2f} 年\n")
+        
+        # 生成图表（使用原始Plt绘图类）
+        Plt = _ENGINE_GLOBALS['Plt']
+        cp = p['capacity_price']
+        cap_kw = p['battery_capacity_mw'] * 1000
+        smin = p.get('soc_min', 0.1)
+        smax = p.get('soc_max', 0.95)
+        
+        try:
+            Plt.monthly_bar(df, result_dir, cp)
+            Plt.peak_cmp(df, result_dir)
+            if strategy == 'MILP':
+                Plt.lifecycle(ec, result_dir)
+            else:
+                Plt.scatter(df, result_dir)
+                for m, d in [(1,15), (7,15)]:
+                    try: Plt.fcast_vs_real(df, m, d, result_dir, 
+                        df.attrs.get('Load_R2'), df.attrs.get('Load_RMSE'), df.attrs.get('Load_MAPE'))
+                    except: pass
+            if strategy != 'MILP':
+                for m, d in [(1,15), (7,15)]:
+                    try: Plt.typical(df, m, d, result_dir, cap_kw, smin, smax)
+                    except: pass
+        except Exception as _e:
+            print(f"Chart generation warning: {_e}")
         
         return str(result_dir)
     except Exception as e:
@@ -639,7 +665,7 @@ def _run_s2_compute(task, params):
         task.progress = 95
         db.session.commit()
         
-        # 保存结果
+        # 保存结果 + 图表
         result_dir = user_dir / f's2_{_dt.datetime.now().strftime("%Y%m%d_%H%M%S")}'
         result_dir.mkdir(parents=True, exist_ok=True)
         df.to_csv(result_dir / '全年逐时结果.csv', index=False, encoding='utf-8-sig')
@@ -648,6 +674,22 @@ def _run_s2_compute(task, params):
             fw.write(f"=== 电-荷-储协同计算结果 ===\n")
             fw.write(f"负荷预测 R²: {df.attrs.get('Load_R2', 0):.4f}\n")
             fw.write(f"电价预测 R²: {df.attrs.get('Price_R2', 0):.4f}\n")
+        
+        # 生成图表
+        Plt = _ENGINE_GLOBALS['Plt']
+        cp = p.get('capacity_price', 30)
+        try:
+            Plt.monthly_bar(df, result_dir, cp)
+            Plt.peak_cmp(df, result_dir)
+            Plt.purchase_cost(df, result_dir)
+            Plt.scatter(df, result_dir)
+            for m, d in [(1,15), (7,15)]:
+                try: Plt.fcast_vs_real(df, m, d, result_dir)
+                except: pass
+                try: Plt.price_fcast_vs_real(df, m, d, result_dir)
+                except: pass
+        except Exception as _e:
+            print(f"S2 chart warning: {_e}")
         
         return str(result_dir)
     except Exception as e:
@@ -665,6 +707,40 @@ def api_task_status(task_id):
         return jsonify({'error': '任务不存在'}), 404
     
     return jsonify(task.to_dict())
+
+# ============================================================
+# API: 展示结果图表
+# ============================================================
+@app.route('/api/task/<int:task_id>/charts')
+@login_required
+def api_task_charts(task_id):
+    task = ComputeTask.query.get(task_id)
+    if not task or task.user_id != current_user.id:
+        return jsonify({'error': '任务不存在'}), 404
+    if task.status != 'completed' or not task.result_file:
+        return jsonify({'error': '结果不可用'}), 400
+    
+    result_dir = Path(task.result_file)
+    if not result_dir.exists():
+        return jsonify({'error': '结果文件丢失'}), 404
+    
+    charts = []
+    for f in sorted(result_dir.iterdir()):
+        if f.suffix.lower() in ('.png', '.jpg', '.jpeg'):
+            charts.append({'name': f.name, 'url': url_for('api_task_chart_file', task_id=task_id, filename=f.name)})
+    return jsonify({'charts': charts})
+
+@app.route('/api/task/<int:task_id>/charts/<filename>')
+@login_required
+def api_task_chart_file(task_id, filename):
+    task = ComputeTask.query.get(task_id)
+    if not task or task.user_id != current_user.id:
+        return jsonify({'error': '任务不存在'}), 404
+    result_dir = Path(task.result_file)
+    fp = result_dir / filename
+    if not fp.exists():
+        return jsonify({'error': '文件不存在'}), 404
+    return send_file(str(fp), mimetype='image/png')
 
 # ============================================================
 # API: 下载结果

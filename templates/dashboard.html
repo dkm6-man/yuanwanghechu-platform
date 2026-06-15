@@ -483,9 +483,9 @@ function pollTask(type, taskId, btns, progId, statusId, kpiIds, chartIds) {
             resetUI(type,btns,statusId);
             if (chartIds.charts) document.getElementById(chartIds.charts).style.display = 'grid';
             if (chartIds.dl) { document.getElementById(chartIds.dl).style.display='block'; document.getElementById(chartIds.dllink).href='/api/task/'+taskId+'/download'; }
-            Object.keys(kpiIds).forEach(k => document.getElementById(type+k).textContent = '已计算');
-            if (chartIds.chartA) document.getElementById(chartIds.chartA).innerHTML = '<div style="padding:80px;color:#4caf50;">✅ 计算完成<br>📊 详细图表请下载结果查看</div>';
-            if (chartIds.chartB) document.getElementById(chartIds.chartB).innerHTML = '<div style="padding:80px;color:#4caf50;">✅ 计算完成<br>📊 详细图表请下载结果查看</div>';
+            Object.keys(kpiIds).forEach(k => document.getElementById(type+k).textContent = '✓');
+            // 加载图表
+            loadCharts(taskId, type, chartIds);
         } else if (d.status==='failed') {
             resetUI(type,btns,statusId);
             alert('计算失败，请检查参数');
@@ -503,7 +503,23 @@ function resetUI(type, btns, statusId) {
     else document.getElementById('s2calc').textContent = '计  算';
 }
 
-function s1UpdateChart() {}
+function function s1UpdateChart() {}
+
+// ===== 加载计算图表 =====
+function loadCharts(taskId, type, chartIds) {
+    fetch('/api/task/'+taskId+'/charts')
+    .then(r=>r.json())
+    .then(data => {
+        if (!data.charts || !data.charts.length) return;
+        let html = '';
+        data.charts.forEach((c, i) => {
+            html += '<div style="margin:4px;"><img src="'+c.url+'" style="max-width:100%;border:1px solid #ddd;border-radius:4px;" /></div>';
+        });
+        if (chartIds.chartA) document.getElementById(chartIds.chartA).innerHTML = html || '<div style="padding:40px;color:#999;">无图表</div>';
+        if (chartIds.chartB) document.getElementById(chartIds.chartB).innerHTML = '';
+    })
+    .catch(() => {});
+}
 s1ToggleParams();
 
 // ===== 分时电价管理弹窗 =====
